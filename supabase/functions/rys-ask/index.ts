@@ -29,7 +29,7 @@ function costOf(u: Anthropic.Beta.BetaUsage): number {
 const plain = (html: string) => (html || "")
   .replace(/<br\s*\/?>/gi, "\n").replace(/<\/(p|div|li|h\d)>/gi, "\n").replace(/<[^>]+>/g, "")
   .replace(/&nbsp;/g, " ").replace(/&gt;/g, ">").replace(/&lt;/g, "<").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, "&")
-  .replace(/[﻿​]/g, "").replace(/[ \t ]+/g, " ").replace(/\n\s*\n+/g, "\n").trim();
+  .replace(/[\ufeff\u200b]/g, "").replace(/[ \t\u00a0]+/g, " ").replace(/\n\s*\n+/g, "\n").trim();
 
 async function all<T>(db: SupabaseClient, table: string, cols: string, mod?: (q: any) => any): Promise<T[]> {
   const out: T[] = [];
