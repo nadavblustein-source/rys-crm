@@ -972,11 +972,15 @@
     log.innerHTML = '';
     if (!ASK.turns.length) {
       const sugs = ['אילו לקוחות מחכים לזיכוי?', 'כמה לקוחות יש בכל קבוצה?', 'מה קורה עם הלקוח האחרון שנוסף?', 'למי עוד לא יצאה חשבונית 3?'];
-      log.appendChild(h(`<div class="askhello"><p>אפשר לשאול כל שאלה על הלקוחות, הסטטוסים, התשלומים והעדכונים. העוזר קורא את כל המערכת ועונה, אבל לא משנה בה כלום.</p><div class="sugs">${sugs.map((q) => `<button class="btn ghost" data-q="${esc(q)}">${esc(q)}</button>`).join('')}</div></div>`));
+      log.appendChild(h(`<div class="askhello"><p>אפשר לשאול כל שאלה על הלקוחות, הסטטוסים, התשלומים והעדכונים. אפשר גם לבקש שינוי, למשל "תעביר את דני לבתהליך", והוא יבוצע רק אחרי שתאשר.</p><div class="sugs">${sugs.map((q) => `<button class="btn ghost" data-q="${esc(q)}">${esc(q)}</button>`).join('')}</div></div>`));
     }
     ASK.turns.forEach((t) => {
       if (t.role === 'user') log.appendChild(h(`<div class="msg me">${esc(t.content)}</div>`));
-      else { const m = h('<div class="msg bot"></div>'); m.innerHTML = t.error ? `<p style="color:var(--danger)">${esc(t.content)}</p>` : mdToHtml(t.content); log.appendChild(m); }
+      else {
+        const m = h('<div class="msg bot"></div>'); m.innerHTML = t.error ? `<p style="color:var(--danger)">${esc(t.content)}</p>` : mdToHtml(t.content);
+        if (t.actions && t.actions.length) m.appendChild(actionsCard(t));
+        log.appendChild(m);
+      }
     });
     if (ASK.busy) log.appendChild(h('<div class="msg bot thinking" aria-live="polite">בודק במערכת<span>.</span><span>.</span><span>.</span></div>'));
     log.scrollTop = log.scrollHeight;
@@ -993,8 +997,33 @@
       err = (data && data.error) || 'לא הצלחתי להתחבר לעוזר. נסה שוב.';
     }
     if (err) ASK.turns.push({ role: 'assistant', content: err, error: true });
-    else ASK.turns.push({ role: 'assistant', content: data.answer });
+    else ASK.turns.push({ role: 'assistant', content: data.answer, actions: data.actions || [], state: 'pending' });
     renderAsk();
+  }
+  function actionsCard(t) {
+    const c = h(`<div class="acard"><ul>${t.actions.map((a) => `<li><b>${esc(a.name)}</b> · ${esc(a.field)}: ${a.from ? `<s>${esc(a.from)}</s> ← ` : ''}${esc(a.to)}</li>`).join('')}</ul></div>`);
+    if (t.state === 'done') { c.appendChild(h('<p class="astate">✓ בוצע</p>')); return c; }
+    if (t.state === 'cancel') { c.appendChild(h('<p class="astate">בוטל</p>')); return c; }
+    const row = h(`<div class="arow"><button class="btn" data-ok>${t.actions.length > 1 ? `אישור ${t.actions.length} שינויים` : 'אישור'}</button><button class="btn ghost" data-no>ביטול</button></div>`);
+    row.querySelector('[data-no]').addEventListener('click', () => { t.state = 'cancel'; renderAsk(); });
+    row.querySelector('[data-ok]').addEventListener('click', async (e) => {
+      e.currentTarget.disabled = true;
+      const befores = []; let fail = 0;
+      for (const a of t.actions) {
+        const item = S.items.find((i) => i.id === a.item_id); if (!item) { fail++; continue; }
+        const before = { vals: Object.assign({}, item.vals), group_id: item.group_id, name: item.name };
+        const patch = {};
+        if (a.patch.group_id) patch.group_id = a.patch.group_id;
+        if (a.patch.name) patch.name = a.patch.name;
+        if (a.patch.col) { const vals = Object.assign({}, item.vals); if (a.patch.val == null) delete vals[a.patch.col]; else vals[a.patch.col] = a.patch.val; patch.vals = vals; }
+        const r = await saveItem(item, patch, true);
+        if (r) befores.push([item, before]); else fail++;
+      }
+      t.state = 'done'; renderAsk(); renderContent(); if (S.openItem) renderPanel();
+      toast(fail ? `בוצעו ${befores.length}, נכשלו ${fail}` : 'בוצע', async () => { for (const [item, b] of befores) await saveItem(item, b, true); t.state = 'pending'; toast('השינוי בוטל'); renderAsk(); renderContent(); });
+    });
+    c.appendChild(row);
+    return c;
   }
 
   /* ---------- realtime ---------- */

@@ -83,13 +83,13 @@ ${statusCols.join("\n")}
 
 כל הלקוחות (${main.length}), בפורמט [מספר] שם | שדות:
 ${rows.join("\n")}`;
-  return { text, names: Object.fromEntries(items.map((i) => [i.id, i.name])) as Record<number, string> };
+  return { text, names: Object.fromEntries(items.map((i) => [i.id, i.name])) as Record<number, string>, mainCols, gname, items: Object.fromEntries(main.map((i) => [i.id, i])) as Record<number, Item> };
 }
 
 const SYSTEM = `אתה העוזר של מערכת ה-CRM "Restart your soul" (RYS) של נדב ורון. המערכת מנהלת לקוחות שמקבלים מכשירים (בעיקר אייפון ומחשבים) דרך מימון של קרן סיוע: הגשת חשבוניות (1, 2, 3), אישורים, סירובים, זיכויים, תשלומים ואיסוף/משלוח.
 אתה עונה לנדב או לרון על כל שאלה על הלקוחות והנתונים במערכת, לפי הנתונים בלבד. אל תנחש מספרים ואל תמציא. אם אין מידע, אמור זאת.
 הנתונים של כל הלקוחות מופיעים למטה. העדכונים וההערות על כל לקוח (השיחות בין נדב לרון) לא מופיעים: כדי לקרוא אותם השתמש בכלי get_updates, וכדי לחפש מילה או נושא בכל העדכונים השתמש ב-search_updates. כשהשאלה היא "מה קורה עם X" או "למה", תמיד קרא את העדכונים שלו.
-אתה רק קורא ועונה. אינך יכול לשנות שום דבר במערכת, ואם מבקשים שינוי, הסבר בקצרה איך עושים אותו במסך.
+כשמבקשים לשנות משהו (להעביר קבוצה, לשנות סטטוס, לעדכן שדה), השתמש בכלי propose_changes. הכלי לא משנה כלום: הוא מציג למשתמש כפתור "אישור", והשינוי קורה רק אחרי שהוא לוחץ. אחרי שהצעת, כתוב במשפט אחד מה יקרה אחרי האישור. אל תכתוב שהשינוי כבר בוצע. אי אפשר למחוק לקוחות, לכתוב עדכונים או לשנות שורות תשלום דרך העוזר; אם מבקשים, הסבר בקצרה איך עושים את זה במסך.
 
 איך לכתוב את התשובה (חשוב: נדב רוצה שהכל יהיה ברור וקל):
 - שורה ראשונה: התשובה עצמה, מודגשת, במשפט אחד.
@@ -104,7 +104,40 @@ const tools: Anthropic.Beta.BetaTool[] = [
     input_schema: { type: "object", properties: { item_ids: { type: "array", items: { type: "integer" }, minItems: 1, maxItems: 20 } }, required: ["item_ids"], additionalProperties: false } },
   { name: "search_updates", description: "Find updates and replies (on any customer) containing a word or phrase. Returns up to 40 matches with the customer, author, date and text. Hebrew text: search a short stem, e.g. 'זיכוי' or 'סירוב'.",
     input_schema: { type: "object", properties: { text: { type: "string", minLength: 2 } }, required: ["text"], additionalProperties: false } },
+  { name: "propose_changes", description: "Propose changes to customers for the user to approve with one tap. Nothing changes until they approve. field is a column title exactly as listed, or 'קבוצה' to move the customer to another group, or 'שם' to rename. For choice columns, value must be one of that column's options exactly; for 'קבוצה', a group title exactly. Use an empty value to clear a field.",
+    input_schema: { type: "object", properties: { changes: { type: "array", minItems: 1, maxItems: 50, items: { type: "object", properties: {
+      item_id: { type: "integer" }, field: { type: "string" }, value: { type: "string" } }, required: ["item_id", "field", "value"], additionalProperties: false } } }, required: ["changes"], additionalProperties: false } },
 ];
+
+type Action = { item_id: number; name: string; field: string; from: string; to: string; patch: { group_id?: string; name?: string; col?: string; val?: any } };
+
+function resolveChange(snap: Awaited<ReturnType<typeof snapshot>>, ch: { item_id: number; field: string; value: string }, ppl: Record<string, string> = {}): Action | string {
+  const it = snap.items[ch.item_id];
+  if (!it) return `[${ch.item_id}] לא נמצא לקוח`;
+  const value = String(ch.value ?? "").trim();
+  const base = { item_id: it.id, name: it.name, field: ch.field };
+  if (ch.field === "קבוצה") {
+    const gid = Object.keys(snap.gname).find((k) => snap.gname[k] === value);
+    if (!gid) return `אין קבוצה בשם "${value}". הקבוצות: ${Object.values(snap.gname).join(", ")}`;
+    return { ...base, from: snap.gname[it.group_id] ?? "", to: value, patch: { group_id: gid } };
+  }
+  if (ch.field === "שם") { if (!value) return "שם לא יכול להיות ריק"; return { ...base, from: it.name, to: value, patch: { name: value } }; }
+  const c = snap.mainCols.find((x) => x.title === ch.field);
+  if (!c) return `אין עמודה בשם "${ch.field}"`;
+  const from = valText(c, it.vals?.[c.id], ppl);
+  if (!value) return { ...base, from, to: "(ריק)", patch: { col: c.id, val: null } };
+  if (c.type === "status") {
+    const labels = c.settings?.labels ?? {};
+    const idx = Object.keys(labels).find((k) => labels[k] === value);
+    if (idx === undefined) return `אין אפשרות "${value}" בעמודה ${c.title}. האפשרויות: ${Object.values(labels).filter(Boolean).join(" / ")}`;
+    return { ...base, from, to: value, patch: { col: c.id, val: { index: idx } } };
+  }
+  if (c.type === "checkbox") { const on = /^(כן|v|✓|true|1)$/i.test(value); return { ...base, from, to: on ? "כן" : "לא", patch: { col: c.id, val: on ? true : null } }; }
+  if (c.type === "numbers") { const n = Number(value.replace(/[,₪\s]/g, "")); if (isNaN(n)) return `"${value}" אינו מספר`; return { ...base, from, to: String(n), patch: { col: c.id, val: String(n) } }; }
+  if (c.type === "date") { if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return "תאריך בפורמט YYYY-MM-DD"; return { ...base, from, to: value, patch: { col: c.id, val: value } }; }
+  if (["people", "file", "subtasks"].includes(c.type)) return `את העמודה ${c.title} משנים במסך`;
+  return { ...base, from, to: value, patch: { col: c.id, val: value } };
+}
 
 async function runTool(db: SupabaseClient, names: Record<number, string>, name: string, input: any): Promise<string> {
   const fmt = (u: Upd) => `${u.created_at.slice(0, 16).replace("T", " ")} · ${u.creator_name ?? ""}${u.parent_id ? " (תגובה)" : ""}: ${plain(u.body)}`;
@@ -155,6 +188,7 @@ Deno.serve(async (req) => {
     const history = (body.history ?? []).filter((t) => (t.role === "user" || t.role === "assistant") && typeof t.content === "string" && t.content).slice(-12);
     const messages: Anthropic.Beta.BetaMessageParam[] = [...history, { role: "user", content: question }];
     let cost = 0, text = "";
+    const actions: Action[] = [];
     for (let round = 0; round < 8; round++) {
       const res = await client.beta.messages.create({
         model: MODEL,
@@ -178,6 +212,13 @@ Deno.serve(async (req) => {
       }
       messages.push({ role: "assistant", content: res.content as any });
       const results = await Promise.all(res.content.filter((b: any) => b.type === "tool_use").map(async (b: any) => {
+        if (b.name === "propose_changes") {
+          const out = (b.input.changes ?? []).slice(0, 50).map((ch: any) => resolveChange(snap, ch));
+          const ok = out.filter((x: any) => typeof x !== "string") as Action[];
+          actions.push(...ok);
+          const bad = out.filter((x: any) => typeof x === "string");
+          return { type: "tool_result" as const, tool_use_id: b.id, content: `${ok.length} שינויים מוצגים למשתמש לאישור.${bad.length ? " נדחו: " + bad.join("; ") : ""}`, is_error: ok.length === 0 };
+        }
         try { return { type: "tool_result" as const, tool_use_id: b.id, content: await runTool(db, snap.names, b.name, b.input) }; }
         catch (e) { return { type: "tool_result" as const, tool_use_id: b.id, content: String(e), is_error: true }; }
       }));
@@ -186,7 +227,7 @@ Deno.serve(async (req) => {
     }
     text = text || "לא הצלחתי לענות על זה. אפשר לנסח אחרת?";
     await db.from("rys_ai_log").insert({ question, answer: text, cost, user_id: u.user.id });
-    return json({ answer: text, cost, spent: spent + cost, cap: MONTHLY_CAP_USD });
+    return json({ answer: text, actions, cost, spent: spent + cost, cap: MONTHLY_CAP_USD });
   } catch (e) {
     console.error(e);
     const msg = e instanceof Anthropic.AuthenticationError ? "המפתח של Anthropic לא תקין" : e instanceof Anthropic.RateLimitError ? "יותר מדי שאלות ברגע, נסה שוב בעוד דקה" : "משהו השתבש, נסה שוב";

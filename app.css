@@ -300,3 +300,8 @@ button.chip{border:0;min-height:32px;font-weight:500}
   .bcol .bl{font-size:10px}
   .hbar{width:60px}
 }
+.acard{margin-top:10px;border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:#fafbfe}
+.acard ul{margin:0;padding:0 18px 0 0;display:flex;flex-direction:column;gap:4px;font-size:14px}
+.acard s{color:var(--muted)}
+.acard .arow{display:flex;gap:8px;margin-top:10px}
+.acard .astate{margin:8px 0 0;color:var(--muted);font-size:14px}
