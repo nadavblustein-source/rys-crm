@@ -12,8 +12,9 @@ window.RYS_ADMIN = (function () {
 
     // my password: everyone
     wrap.appendChild(myPassword(A));
-    if (!me.is_admin) { wrap.appendChild(h('<p style="color:#62636f">את שאר ההגדרות יכול לשנות רק מנהל המערכת.</p>')); return; }
-    wrap.appendChild(await usersCard(A));
+    const designer = me.is_admin || me.can_design;
+    if (!designer) { wrap.appendChild(h('<p style="color:#62636f">את שאר ההגדרות יכול לשנות רק מנהל המערכת.</p>')); return; }
+    if (me.is_admin) wrap.appendChild(await usersCard(A));
     wrap.appendChild(groupsCard(A));
     wrap.appendChild(columnsCard(A));
     wrap.appendChild(automationsCard(A));
@@ -41,10 +42,16 @@ window.RYS_ADMIN = (function () {
 
   async function usersCard(A) {
     const { h, esc, sb, toast, S } = A;
-    const c = card(h, 'משתמשים', 'מי יכול להיכנס למערכת. אפשר לאפס סיסמה לכל משתמש ולהוסיף משתמשים חדשים.');
+    const c = card(h, 'משתמשים', 'מי יכול להיכנס למערכת. "עורך מערכת" יכול לשנות קבוצות, עמודות, תוויות ואוטומציות, אבל לא לנהל משתמשים.');
     const { data } = await sb.from('rys_members').select('*').order('created_at');
     (data || []).forEach((m) => {
-      const r = h(`<div style="${rowStyle}"><b style="min-width:120px">${esc(m.name)}</b><span dir="ltr" style="color:#62636f;min-width:90px">${esc(m.username || '')}</span>${m.is_admin ? '<span style="background:#e7f0fd;color:#0b63c7;border-radius:6px;padding:2px 8px;font-size:13px">מנהל</span>' : ''}<span style="flex:1"></span><button class="btn ghost" data-a="pw">איפוס סיסמה</button></div>`);
+      const r = h(`<div style="${rowStyle}"><b style="min-width:120px">${esc(m.name)}</b><span dir="ltr" style="color:#62636f;min-width:90px">${esc(m.username || '')}</span>${m.is_admin ? '<span style="background:#e7f0fd;color:#0b63c7;border-radius:6px;padding:2px 8px;font-size:13px">מנהל</span>' : `<label style="display:flex;gap:6px;align-items:center;min-height:42px" title="יכול לשנות קבוצות, עמודות, תוויות ואוטומציות. לא יכול לנהל משתמשים."><input type="checkbox" data-a="design" style="width:20px;height:20px" ${m.can_design ? 'checked' : ''}>עורך מערכת</label>`}<span style="flex:1"></span><button class="btn ghost" data-a="pw">איפוס סיסמה</button></div>`);
+      const dz = r.querySelector('[data-a=design]');
+      if (dz) dz.addEventListener('change', async () => {
+        const { error } = await sb.from('rys_members').update({ can_design: dz.checked }).eq('user_id', m.user_id);
+        if (error) { dz.checked = !dz.checked; return toast(error.message); }
+        toast(dz.checked ? `${m.name} יכול עכשיו לערוך את מבנה המערכת` : `${m.name} כבר לא עורך מערכת`);
+      });
       r.querySelector('[data-a=pw]').addEventListener('click', async () => {
         const p = prompt(`סיסמה חדשה ל-${m.name} (6 תווים לפחות):`);
         if (!p) return;

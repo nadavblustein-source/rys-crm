@@ -29,6 +29,8 @@
     logout: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 4h4a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-4M10 17l-5-5 5-5M5 12h11"/></svg>',
     trash: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>',
     gear: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>',
+    spark: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>',
+    send: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 12L4 4l3 8-3 8z"/><path d="M7 12h13"/></svg>',
     plus: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>'
   };
   const fmtDate = (d) => { if (!d) return ''; const [y, m, dd] = String(d).slice(0, 10).split('-'); return dd && m ? `${dd}/${m}/${y.slice(2)}` : String(d); };
@@ -165,6 +167,7 @@
         <div class="logo">RYS</div>
         <button class="navbtn" data-view="table" aria-label="טבלה">${icon.board}</button>
         <button class="navbtn" data-view="kanban" aria-label="קנבן">${icon.kanban}</button>
+        <button class="navbtn ask" data-act="ask" aria-label="שאל את המערכת">${icon.spark}</button>
         <button class="navbtn bottom" data-view="admin" aria-label="ניהול והגדרות">${icon.gear}</button>
         <button class="navbtn" data-act="logout" aria-label="התנתקות">${icon.logout}</button>
       </nav>
@@ -180,6 +183,7 @@
         <div class="stats" id="stats"></div>
         <div class="toolbar">
           <button class="btn" data-act="new">${icon.plus} לקוח חדש</button>
+          <button class="btn ghost askbtn" data-act="ask">${icon.spark} שאל את המערכת</button>
           <label class="search">${icon.search}<span class="sr">חיפוש</span><input id="q" type="search" placeholder="חיפוש לפי שם, טלפון, ת״ז, מייל"></label>
         </div>
         <div class="content" id="content"></div>
@@ -189,6 +193,7 @@
     shell.querySelectorAll('[data-view]').forEach((b) => b.addEventListener('click', () => { S.view = b.dataset.view; renderContent(); }));
     shell.querySelector('[data-act=logout]').addEventListener('click', async () => { await sb.auth.signOut(); location.reload(); });
     shell.querySelector('[data-act=new]').addEventListener('click', () => newItem(S.groups[0].id, 'לקוח חדש', true));
+    shell.querySelectorAll('[data-act=ask]').forEach((b) => b.addEventListener('click', openAsk));
     const q = shell.querySelector('#q');
     q.value = S.search;
     q.addEventListener('input', () => { S.search = q.value.trim().toLowerCase(); renderContent(); });
@@ -649,6 +654,89 @@
       ul.appendChild(h(`<li><b>${esc(a.user_name || 'מערכת')}</b><span>${esc(label)}: ${esc(show(a.old_val))} ← ${esc(show(a.new_val))}</span><span class="when">${esc(fmtWhen(a.created_at))}</span></li>`));
     });
     body.appendChild(ul);
+  }
+
+
+  /* ---------- ask the system (Claude) ---------- */
+  const ASK = { turns: [], busy: false };
+  function mdToHtml(md) {
+    const inline = (t) => esc(t)
+      .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
+      .replace(/\[([^\]]+)\]\(#item-(\d+)\)/g, '<a href="#" data-item="$2">$1</a>');
+    const lines = String(md || '').split('\n');
+    let out = '', i = 0;
+    while (i < lines.length) {
+      const l = lines[i].trim();
+      if (l.startsWith('|')) {
+        const rows = [];
+        while (i < lines.length && lines[i].trim().startsWith('|')) { rows.push(lines[i].trim()); i++; }
+        const cells = (r) => r.replace(/^\||\|$/g, '').split('|').map((c) => c.trim());
+        const body = rows.filter((r) => !/^\|[\s:|-]+\|?$/.test(r));
+        out += '<div class="tblwrap"><table>' + body.map((r, k) => '<tr>' + cells(r).map((c) => k === 0 ? `<th>${inline(c)}</th>` : `<td>${inline(c)}</td>`).join('') + '</tr>').join('') + '</table></div>';
+        continue;
+      }
+      if (/^([•\-*]|\d+\.)\s+/.test(l)) {
+        const items = [];
+        while (i < lines.length && /^([•\-*]|\d+\.)\s+/.test(lines[i].trim())) { items.push(lines[i].trim().replace(/^([•\-*]|\d+\.)\s+/, '')); i++; }
+        out += '<ul>' + items.map((x) => `<li>${inline(x)}</li>`).join('') + '</ul>';
+        continue;
+      }
+      if (l) out += `<p>${inline(l.replace(/^#+\s*/, ''))}</p>`;
+      i++;
+    }
+    return out;
+  }
+  function openAsk() {
+    let d = document.getElementById('ask');
+    if (d) { d.querySelector('textarea').focus(); return; }
+    const scrim = h('<div class="scrim" id="askscrim"></div>'); scrim.addEventListener('click', closeAsk); document.body.appendChild(scrim);
+    d = h(`<div class="panel ask" id="ask" role="dialog" aria-modal="true" aria-label="שאל את המערכת">
+      <header><div class="ptitle"><button class="iconbtn" data-act="close" aria-label="סגירה">${icon.close}</button><h2 style="flex:1;margin:0;font-size:20px;display:flex;align-items:center;gap:8px">${icon.spark} שאל את המערכת</h2><button class="btn text" data-act="clear">שיחה חדשה</button></div></header>
+      <div class="pbody" id="asklog"></div>
+      <form class="askform"><label class="sr" for="askq">השאלה שלך</label><textarea id="askq" rows="2" placeholder="לדוגמה: אילו לקוחות מחכים לזיכוי?"></textarea><button class="btn" aria-label="שליחה">${icon.send}</button></form>
+    </div>`);
+    document.body.appendChild(d);
+    d.querySelector('[data-act=close]').addEventListener('click', closeAsk);
+    d.querySelector('[data-act=clear]').addEventListener('click', () => { ASK.turns = []; renderAsk(); d.querySelector('textarea').focus(); });
+    d.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeAsk(); });
+    const f = d.querySelector('form'), ta = f.querySelector('textarea');
+    ta.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); f.requestSubmit(); } });
+    f.addEventListener('submit', (e) => { e.preventDefault(); const q = ta.value.trim(); if (q && !ASK.busy) { ta.value = ''; ask(q); } });
+    d.querySelector('#asklog').addEventListener('click', (e) => {
+      const a = e.target.closest('[data-item]'); if (a) { e.preventDefault(); const it = S.items.find((x) => String(x.id) === a.dataset.item); if (it) { closeAsk(); openPanel(it); } else toast('הלקוח לא נמצא'); return; }
+      const sug = e.target.closest('[data-q]'); if (sug && !ASK.busy) ask(sug.dataset.q);
+    });
+    renderAsk(); ta.focus();
+  }
+  function closeAsk() { ['ask', 'askscrim'].forEach((id) => { const x = document.getElementById(id); if (x) x.remove(); }); }
+  function renderAsk() {
+    const log = document.getElementById('asklog'); if (!log) return;
+    log.innerHTML = '';
+    if (!ASK.turns.length) {
+      const sugs = ['אילו לקוחות מחכים לזיכוי?', 'כמה לקוחות יש בכל קבוצה?', 'מה קורה עם הלקוח האחרון שנוסף?', 'למי עוד לא יצאה חשבונית 3?'];
+      log.appendChild(h(`<div class="askhello"><p>אפשר לשאול כל שאלה על הלקוחות, הסטטוסים, התשלומים והעדכונים. העוזר קורא את כל המערכת ועונה, אבל לא משנה בה כלום.</p><div class="sugs">${sugs.map((q) => `<button class="btn ghost" data-q="${esc(q)}">${esc(q)}</button>`).join('')}</div></div>`));
+    }
+    ASK.turns.forEach((t) => {
+      if (t.role === 'user') log.appendChild(h(`<div class="msg me">${esc(t.content)}</div>`));
+      else { const m = h('<div class="msg bot"></div>'); m.innerHTML = t.error ? `<p style="color:var(--danger)">${esc(t.content)}</p>` : mdToHtml(t.content); log.appendChild(m); }
+    });
+    if (ASK.busy) log.appendChild(h('<div class="msg bot thinking" aria-live="polite">בודק במערכת<span>.</span><span>.</span><span>.</span></div>'));
+    log.scrollTop = log.scrollHeight;
+  }
+  async function ask(q) {
+    const history = ASK.turns.filter((t) => !t.error).map((t) => ({ role: t.role, content: t.content }));
+    ASK.turns.push({ role: 'user', content: q }); ASK.busy = true; renderAsk();
+    let res;
+    try { res = await sb.functions.invoke('rys-ask', { body: { question: q, history } }); } catch (e) { res = { error: e }; }
+    ASK.busy = false;
+    let data = res.data, err = null;
+    if (res.error) {
+      try { const ctx = res.error.context; data = ctx && ctx.json ? await ctx.json() : null; } catch (e) { data = null; }
+      err = (data && data.error) || 'לא הצלחתי להתחבר לעוזר. נסה שוב.';
+    }
+    if (err) ASK.turns.push({ role: 'assistant', content: err, error: true });
+    else ASK.turns.push({ role: 'assistant', content: data.answer });
+    renderAsk();
   }
 
   /* ---------- realtime ---------- */
