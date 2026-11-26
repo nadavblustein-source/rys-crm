@@ -62,12 +62,17 @@
 (function () {
   const C = window.RYS_CONFIG;
   const rpc = (fn, body) => fetch(`${C.supabaseUrl}/rest/v1/rpc/${fn}`, { method: 'POST', headers: { apikey: C.supabaseKey, 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
+  const HIDE = { color_mkzbejpk: ['3'] }; // no pickup from Herzliya
+  const model = (t) => t.trim() === 'אחר' ? 'Other' : t.replace(/iphone/ig, 'iPhone').replace(/airpods\s*/ig, 'AirPods ').replace(/Pro(\d)/g, 'Pro $1')
+    .replace(/\s*\+\s*/g, ' + ').replace(/^(\d\d) /, 'iPhone $1 ').replace(/\s+/g, ' ').trim();
   const f = document.getElementById('f'), err = document.getElementById('err'), btn = document.getElementById('send');
   rpc('rys_form_options').then((r) => r.json()).then((o) => {
     Object.entries(o || {}).forEach(([id, c]) => {
       const sel = f.elements[id]; if (!sel) return;
       const t = document.querySelector(`[data-t="${id}"]`); if (t && c.title) t.textContent = c.title;
-      Object.entries(c.labels || {}).filter(([, v]) => v).forEach(([k, v]) => { const op = document.createElement('option'); op.value = k; op.textContent = v; sel.appendChild(op); });
+      let opts = Object.entries(c.labels || {}).filter(([k, v]) => v && !(HIDE[id] || []).includes(k)).map(([k, v]) => [k, id === 'color_mkzacdbj' ? model(v) : v]);
+      if (id === 'color_mkzacdbj') opts.sort((a, b) => (a[1] === 'Other') - (b[1] === 'Other') || a[1].localeCompare(b[1], 'en', { numeric: true }));
+      opts.forEach(([k, v]) => { const op = document.createElement('option'); op.value = k; op.textContent = /[a-z]/i.test(v) ? '\u2066' + v + '\u2069' : v; sel.appendChild(op); });
     });
   }).catch(() => {});
   f.addEventListener('submit', async (e) => {
