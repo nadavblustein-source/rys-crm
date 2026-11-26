@@ -10,14 +10,22 @@
     groups: [], subGroups: [], columns: [], subColumns: [], people: {}, members: [],
     items: [], subitems: [], updCounts: {},
     view: 'table', search: '', groupFilter: null, collapsed: {},
-    openItem: null, panelTab: 'updates'
+    openItem: null, panelTab: 'updates',
+    sort: null, filters: {}, updText: {}, lastAct: {}, mentions: [], mentionDone: new Set(), staleDays: 7
   };
+  try { S.staleDays = Number(localStorage.getItem('rys_stale')) || 7; } catch (e) {}
   try { S.collapsed = JSON.parse(localStorage.getItem('rys_collapsed') || '{}'); } catch (e) { S.collapsed = {}; }
 
   /* ---------- helpers ---------- */
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const h = (html) => { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild; };
-  const toast = (msg) => { const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), 2600); };
+  const toast = (msg, undo) => {
+    const t = document.getElementById('toast'); t.innerHTML = '';
+    t.appendChild(document.createTextNode(msg));
+    if (undo) { const b = document.createElement('button'); b.textContent = 'בטל'; b.onclick = async () => { t.classList.remove('show'); await undo(); }; t.appendChild(b); }
+    t.classList.toggle('undo', !!undo); t.classList.add('show');
+    clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), undo ? 6000 : 2600);
+  };
   const icon = {
     board: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 10v10"/></svg>',
     kanban: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="5" height="16" rx="1"/><rect x="10" y="4" width="5" height="10" rx="1"/><rect x="17" y="4" width="4" height="13" rx="1"/></svg>',
@@ -31,6 +39,11 @@
     gear: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>',
     spark: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>',
     send: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 12L4 4l3 8-3 8z"/><path d="M7 12h13"/></svg>',
+    wa: '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm0 18.2a8.2 8.2 0 0 1-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8s-.4-.1-.6.1-.7.8-.8 1-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4.3-.4.7-1.4.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.7 11.8 11.8 0 0 0 4.5 4c1.7.7 2.3.8 3.2.6.5-.1 1.5-.6 1.7-1.2s.2-1.1.2-1.2-.2-.2-.4-.3z"/></svg>',
+    phone: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/></svg>',
+    bell: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0"/></svg>',
+    sort: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M7 4v16M3 16l4 4 4-4M17 20V4M13 8l4-4 4 4"/></svg>',
+    filter: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M3 5h18l-7 8v6l-4-2v-4z"/></svg>',
     plus: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>'
   };
   const fmtDate = (d) => { if (!d) return ''; const [y, m, dd] = String(d).slice(0, 10).split('-'); return dd && m ? `${dd}/${m}/${y.slice(2)}` : String(d); };
@@ -40,6 +53,16 @@
   const ink = (hex) => { const m = /^#?([0-9a-f]{6})$/i.exec(hex || ''); if (!m) return '#fff'; const n = parseInt(m[1], 16); const lum = (c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); }; const L = 0.2126 * lum(n >> 16) + 0.7152 * lum((n >> 8) & 255) + 0.0722 * lum(n & 255); return L > 0.28 ? '#1f2030' : '#fff'; };
   const darken = (hex) => { const m = /^#?([0-9a-f]{6})$/i.exec(hex || ''); if (!m) return hex; if (ink(hex) === '#fff') return hex; const n = parseInt(m[1], 16); const f = (v) => Math.round(v * 0.55); return `rgb(${f(n >> 16)},${f((n >> 8) & 255)},${f(n & 255)})`; };
   const colOf = (cols, id) => cols.find((c) => c.id === id);
+  const plain = (html) => { const d = document.createElement('div'); d.innerHTML = window.DOMPurify.sanitize(String(html || '').replace(/<br\s*\/?>/gi, '\n').replace(/<\/(p|div|li)>/gi, '\n')); return (d.textContent || '').replace(/[\ufeff\u200b]/g, '').replace(/[ \t\u00a0]+/g, ' ').replace(/\n\s*\n+/g, '\n').trim(); };
+  const phoneDigits = (v) => { let d = String(v || '').replace(/\D/g, ''); if (d.startsWith('972')) d = '0' + d.slice(3); return d; };
+  const fmtPhone = (v) => { const d = phoneDigits(v); if (d.length === 10) return `${d.slice(0, 3)}-${d.slice(3, 6)}-${d.slice(6)}`; if (d.length === 9) return `${d.slice(0, 2)}-${d.slice(2, 5)}-${d.slice(5)}`; return String(v || ''); };
+  const waUrl = (v) => 'https://wa.me/' + phoneDigits(v).replace(/^0/, '972');
+  const telUrl = (v) => 'tel:' + phoneDigits(v);
+  const memberOf = (personId) => S.members.find((m) => String(m.person_id) === String(personId));
+  const personName = (id) => { const m = memberOf(id); return m ? m.name : ((S.people[id] || {}).name || id); };
+  const PCOL = ['#0b63c7', '#e2445c', '#00a36c', '#a25ddc', '#fd8c3d', '#037f9c', '#bb3354', '#5559df'];
+  const personColor = (id) => { const i = S.members.findIndex((m) => String(m.person_id) === String(id)); if (i >= 0) return PCOL[i % PCOL.length]; let h = 0; for (const ch of String(id)) h = (h * 31 + ch.charCodeAt(0)) | 0; return PCOL[2 + (Math.abs(h) % (PCOL.length - 2))]; };
+  const daysAgo = (ts) => Math.floor((Date.now() - new Date(ts).getTime()) / 86400000);
 
   function statusInfo(col, v) {
     const s = col.settings || {};
@@ -49,8 +72,9 @@
       // Monday shows label 5 as the default for an empty cell when it has text
       if (labels['5']) idx = '5'; else return { text: '', color: null };
     }
+    if (!labels[idx]) return { text: '', color: null, idx };
     const lc = (s.labels_colors || {})[idx];
-    return { text: labels[idx] || '', color: lc ? lc.color : '#797e93', idx };
+    return { text: labels[idx], color: lc ? lc.color : '#797e93', idx };
   }
   function statusOptions(col) {
     const s = col.settings || {};
@@ -65,7 +89,8 @@
     if (v == null) return '';
     switch (col.type) {
       case 'status': return statusInfo(col, v).text;
-      case 'people': return (v || []).map((id) => (S.people[id] || {}).name || id).join(', ');
+      case 'people': return (v || []).map((id) => personName(id)).join(', ');
+      case 'phone': return fmtPhone(v);
       case 'date': return fmtDate(v);
       case 'numbers': return fmtNum(v);
       case 'checkbox': return v ? '✓' : '';
@@ -75,13 +100,14 @@
 
   /* ---------- data ---------- */
   async function loadAll() {
-    const [g, c, p, it, up, mem] = await Promise.all([
+    const [g, c, p, it, up, mem, md] = await Promise.all([
       sb.from('rys_groups').select('*').order('position'),
       sb.from('rys_columns').select('*').order('position'),
       sb.from('rys_people').select('*'),
       fetchAll('rys_items', '*', (q) => q.eq('archived', false).order('position')),
-      fetchAll('rys_updates', 'id,item_id,parent_id'),
-      sb.from('rys_members').select('*')
+      fetchAll('rys_updates', 'id,item_id,parent_id,body,creator_id,creator_name,created_at'),
+      sb.from('rys_members').select('*'),
+      sb.from('rys_mention_done').select('update_id')
     ]);
     for (const r of [g, c, p, mem]) if (r.error) throw r.error;
     S.groups = g.data.filter((x) => x.board_id === C.boardId);
@@ -93,7 +119,16 @@
     S.members = mem.data;
     S.items = it.filter((x) => x.board_id === C.boardId);
     S.subitems = it.filter((x) => x.board_id === C.subBoardId);
-    S.updCounts = {}; up.forEach((u) => { if (!u.parent_id) S.updCounts[u.item_id] = (S.updCounts[u.item_id] || 0) + 1; });
+    S.updCounts = {}; S.updText = {}; S.lastAct = {}; S.lastUpd = {};
+    up.forEach((u) => {
+      if (!u.parent_id) S.updCounts[u.item_id] = (S.updCounts[u.item_id] || 0) + 1;
+      const t = plain(u.body);
+      S.updText[u.item_id] = (S.updText[u.item_id] || '') + ' ' + t.toLowerCase();
+      if (!S.lastUpd[u.item_id] || u.created_at > S.lastUpd[u.item_id].created_at) S.lastUpd[u.item_id] = { created_at: u.created_at, text: t, who: u.creator_name || personName(u.creator_id) };
+    });
+    S.items.forEach((i) => { const lu = S.lastUpd[i.id]; S.lastAct[i.id] = lu && lu.created_at > i.updated_at ? lu.created_at : i.updated_at; });
+    S.mentionDone = new Set(((md && md.data) || []).map((r) => String(r.update_id)));
+    S.allUpdates = up;
   }
   async function fetchAll(table, cols, mod) {
     const out = []; let from = 0; const step = 1000;
@@ -108,18 +143,24 @@
     }
   }
 
-  async function saveItem(item, patch) {
+  async function saveItem(item, patch, quiet) {
     const { data, error } = await sb.from('rys_items').update(patch).eq('id', item.id).select().single();
     if (error) { toast('השמירה נכשלה: ' + error.message); return null; }
     const moved = data.group_id !== item.group_id && !('group_id' in patch);
-    Object.assign(item, data);
-    if (moved) { const g = S.groups.find((x) => x.id === data.group_id); if (g) toast(`עבר לקבוצה "${g.title}"`); }
+    Object.assign(item, data); S.lastAct[item.id] = data.updated_at || new Date().toISOString();
+    if (moved && !quiet) { const g = S.groups.find((x) => x.id === data.group_id); if (g) toast(`עבר לקבוצה "${g.title}"`); }
     return data;
   }
   async function setVal(item, colId, value) {
+    const before = { vals: Object.assign({}, item.vals), group_id: item.group_id };
     const vals = Object.assign({}, item.vals);
     if (value === null || value === '' || (Array.isArray(value) && !value.length)) delete vals[colId]; else vals[colId] = value;
-    return saveItem(item, { vals });
+    const r = await saveItem(item, { vals }, true);
+    if (r) {
+      const g = r.group_id !== before.group_id ? S.groups.find((x) => x.id === r.group_id) : null;
+      toast(g ? `נשמר, ועבר לקבוצה "${g.title}"` : 'נשמר', async () => { await saveItem(item, before, true); toast('השינוי בוטל'); renderContent(); if (S.openItem) renderPanel(); });
+    }
+    return r;
   }
 
   /* ---------- auth ---------- */
@@ -167,6 +208,7 @@
         <div class="logo">RYS</div>
         <button class="navbtn" data-view="table" aria-label="טבלה">${icon.board}</button>
         <button class="navbtn" data-view="kanban" aria-label="קנבן">${icon.kanban}</button>
+        <button class="navbtn" data-view="urgent" aria-label="מה דחוף">${icon.bell}<span class="badge" data-badge hidden></span></button>
         <button class="navbtn ask" data-act="ask" aria-label="שאל את המערכת">${icon.spark}</button>
         <button class="navbtn bottom" data-view="admin" aria-label="ניהול והגדרות">${icon.gear}</button>
         <button class="navbtn" data-act="logout" aria-label="התנתקות">${icon.logout}</button>
@@ -177,6 +219,7 @@
           <div class="tabs" role="tablist">
             <button class="tab" role="tab" data-view="table">טבלה ראשית</button>
             <button class="tab" role="tab" data-view="kanban">קנבן</button>
+            <button class="tab" role="tab" data-view="urgent">מה דחוף <span class="badge" data-badge hidden></span></button>
             <button class="tab" role="tab" data-view="admin">ניהול</button>
           </div>
         </div>
@@ -186,11 +229,12 @@
           <button class="btn ghost askbtn" data-act="ask">${icon.spark} שאל את המערכת</button>
           <label class="search">${icon.search}<span class="sr">חיפוש</span><input id="q" type="search" placeholder="חיפוש לפי שם, טלפון, ת״ז, מייל"></label>
         </div>
+        <div class="fbar" id="fbar"></div>
         <div class="content" id="content"></div>
       </div>
     </div>`);
     $app.appendChild(shell);
-    shell.querySelectorAll('[data-view]').forEach((b) => b.addEventListener('click', () => { S.view = b.dataset.view; renderContent(); }));
+    shell.querySelectorAll('[data-view]').forEach((b) => b.addEventListener('click', () => { S.view = b.dataset.view; renderContent(); window.scrollTo(0, 0); document.getElementById('content').scrollTop = 0; }));
     shell.querySelector('[data-act=logout]').addEventListener('click', async () => { await sb.auth.signOut(); location.reload(); });
     shell.querySelector('[data-act=new]').addEventListener('click', () => newItem(S.groups[0].id, 'לקוח חדש', true));
     shell.querySelectorAll('[data-act=ask]').forEach((b) => b.addEventListener('click', openAsk));
@@ -210,10 +254,76 @@
         for (const c of S.columns) { const t = cellText(c, i.vals[c.id]); if (t && t.toLowerCase().includes(q)) return true; }
         const digits = q.replace(/\D/g, '');
         if (digits.length >= 4) { const ph = String(i.vals.phone_mkza5fxd || '').replace(/\D/g, ''); if (ph.includes(digits) || ph.replace(/^972/, '0').includes(digits)) return true; }
+        if (q.length >= 2 && (S.updText[i.id] || '').includes(q)) return true;
         return false;
       });
     }
-    return list;
+    for (const [cid, f] of Object.entries(S.filters)) {
+      const c = colOf(S.columns, cid); if (!c) continue;
+      if (f.labels) list = list.filter((i) => { const v = i.vals[cid]; const idx = v && v.index != null && statusInfo(c, v).text ? String(v.index) : ''; return f.labels.includes(idx); });
+      else if (f.text) { const t = f.text.toLowerCase(); list = list.filter((i) => cellText(c, i.vals[cid]).toLowerCase().includes(t)); }
+      else if (f.empty) list = list.filter((i) => !cellText(c, i.vals[cid]));
+    }
+    return sortRows(list);
+  }
+  function sortKey(c, it) {
+    if (!c) return (it.name || '');
+    const v = it.vals[c.id];
+    if (c.type === 'status') { const s = c.settings || {}; const i = v && v.index != null && statusInfo(c, v).text ? String(v.index) : null; return i == null ? null : ((s.labels_positions_v2 || {})[i] ?? Number(i)); }
+    if (c.type === 'numbers') return v == null || v === '' ? null : Number(v);
+    if (c.type === 'checkbox') return v ? 1 : null;
+    const t = cellText(c, v); return t ? (c.type === 'date' ? String(v) : t) : null;
+  }
+  function sortRows(list) {
+    if (!S.sort) return list;
+    const c = S.sort.col === 'name' ? null : colOf(S.columns, S.sort.col); const dir = S.sort.dir;
+    return list.slice().sort((a, b) => {
+      const x = sortKey(c, a), y = sortKey(c, b);
+      if (x == null && y == null) return 0; if (x == null) return 1; if (y == null) return -1;
+      return (typeof x === 'number' && typeof y === 'number' ? x - y : String(x).localeCompare(String(y), 'he')) * dir;
+    });
+  }
+  function renderFbar() {
+    const el = document.getElementById('fbar'); if (!el) return;
+    el.innerHTML = '';
+    if (S.view === 'admin' || S.view === 'urgent') return;
+    const chips = [];
+    if (S.sort) { const c = S.sort.col === 'name' ? { title: S.nameTitle } : colOf(S.columns, S.sort.col); chips.push({ t: `מיון: ${c ? c.title : ''} ${S.sort.dir > 0 ? '↑' : '↓'}`, x: () => { S.sort = null; } }); }
+    for (const [cid, f] of Object.entries(S.filters)) {
+      const c = colOf(S.columns, cid); if (!c) continue;
+      const what = f.labels ? f.labels.map((k) => k === '' ? 'ריק' : ((c.settings.labels || {})[k] || k)).join(', ') : f.empty ? 'ריק' : `"${f.text}"`;
+      chips.push({ t: `${c.title}: ${what}`, x: () => { delete S.filters[cid]; } });
+    }
+    if (!chips.length) return;
+    chips.forEach((ch) => { const b = h(`<button class="fchip">${esc(ch.t)} <span aria-hidden="true">✕</span><span class="sr">הסרה</span></button>`); b.addEventListener('click', () => { ch.x(); renderContent(); }); el.appendChild(b); });
+    if (chips.length > 1) { const b = h('<button class="btn text">ניקוי הכל</button>'); b.addEventListener('click', () => { S.sort = null; S.filters = {}; renderContent(); }); el.appendChild(b); }
+  }
+  function colMenu(anchor, c) {
+    const id = c ? c.id : 'name';
+    const el = h(`<div class="pop colmenu" role="dialog" aria-label="מיון וסינון ${esc(c ? c.title : S.nameTitle)}">
+      <div class="mrow"><button class="opt" data-d="1">${icon.sort} סדר עולה</button><button class="opt" data-d="-1">${icon.sort} סדר יורד</button></div></div>`);
+    el.querySelectorAll('[data-d]').forEach((b) => b.addEventListener('click', () => { S.sort = { col: id, dir: Number(b.dataset.d) }; closePop(); renderContent(); }));
+    if (c && c.type === 'status') {
+      const cur = (S.filters[id] && S.filters[id].labels) || [];
+      el.appendChild(h(`<div class="mh">${icon.filter} הצג רק:</div>`));
+      statusOptions(c).concat([{ idx: '', text: 'ריק', color: '#e6e8ef' }]).forEach((o) => {
+        const lb = h(`<label class="fopt"><input type="checkbox" ${cur.includes(o.idx) ? 'checked' : ''}><span class="sw" style="background:${esc(o.color)}"></span>${esc(o.text)}</label>`);
+        lb.querySelector('input').addEventListener('change', (e) => {
+          const set = new Set((S.filters[id] && S.filters[id].labels) || []);
+          e.target.checked ? set.add(o.idx) : set.delete(o.idx);
+          if (set.size) S.filters[id] = { labels: [...set] }; else delete S.filters[id];
+          renderContent();
+        });
+        el.appendChild(lb);
+      });
+    } else if (c) {
+      const f = h(`<form class="mrow"><label class="sr" for="ff">סינון לפי ${esc(c.title)}</label><input id="ff" placeholder="סינון: מכיל..." value="${esc((S.filters[id] || {}).text || '')}"><button class="btn">סינון</button></form>`);
+      f.addEventListener('submit', (e) => { e.preventDefault(); const v = f.querySelector('input').value.trim(); if (v) S.filters[id] = { text: v }; else delete S.filters[id]; closePop(); renderContent(); });
+      el.appendChild(f);
+      const em = h('<button class="opt">רק שורות שהשדה הזה ריק בהן</button>'); em.addEventListener('click', () => { S.filters[id] = { empty: true }; closePop(); renderContent(); }); el.appendChild(em);
+    }
+    if (S.filters[id] || (S.sort && S.sort.col === id)) { const x = h('<button class="opt" style="color:var(--danger)">ניקוי מיון וסינון בעמודה</button>'); x.addEventListener('click', () => { delete S.filters[id]; if (S.sort && S.sort.col === id) S.sort = null; closePop(); renderContent(); }); el.appendChild(x); }
+    openPop(anchor, el);
   }
 
   function renderStats() {
@@ -233,12 +343,13 @@
       const on = b.dataset.view === S.view;
       b.setAttribute(b.classList.contains('tab') ? 'aria-selected' : 'aria-current', on);
     });
-    renderStats();
+    renderStats(); renderFbar(); renderBadge();
     const el = document.getElementById('content');
     el.innerHTML = '';
-    document.getElementById('stats').style.display = S.view === 'admin' ? 'none' : '';
-    document.querySelector('.toolbar').style.display = S.view === 'admin' ? 'none' : '';
+    document.getElementById('stats').style.display = S.view === 'admin' || S.view === 'urgent' ? 'none' : '';
+    document.querySelector('.toolbar').style.display = S.view === 'admin' || S.view === 'urgent' ? 'none' : '';
     if (S.view === 'admin') window.RYS_ADMIN.render(el, api);
+    else if (S.view === 'urgent') el.appendChild(renderUrgent());
     else if (S.view === 'kanban') el.appendChild(renderKanban()); else { el.appendChild(renderTable()); el.appendChild(renderCards()); }
   }
 
@@ -252,7 +363,7 @@
     const tpl = gridCols(S.columns, 280);
     S.groups.forEach((g) => {
       const rows = list.filter((i) => i.group_id === g.id);
-      if ((S.search || S.groupFilter) && !rows.length) return;
+      if ((S.search || S.groupFilter || Object.keys(S.filters).length) && !rows.length) return;
       const collapsed = !!S.collapsed[g.id];
       const sec = h(`<section class="group">
         <div class="ghead"><button class="toggle" aria-expanded="${!collapsed}" style="color:${darken(g.color)}">${collapsed ? icon.chevL : icon.chev}${esc(g.title)} <span class="count">${rows.length} לקוחות</span></button></div>
@@ -260,8 +371,10 @@
       sec.querySelector('.toggle').addEventListener('click', () => { S.collapsed[g.id] = !collapsed; try { localStorage.setItem('rys_collapsed', JSON.stringify(S.collapsed)); } catch (e) {} renderContent(); });
       if (!collapsed) {
         const box = h(`<div class="gwrap" style="border-right-color:${esc(g.color)}"></div>`);
-        const head = h(`<div class="row head" style="grid-template-columns:${tpl}"><div class="cell name">${esc(S.nameTitle)}</div></div>`);
-        S.columns.forEach((c) => head.appendChild(h(`<div class="cell">${esc(c.title)}</div>`)));
+        const hcell = (c) => { const id = c ? c.id : 'name'; const on = S.filters[id] || (S.sort && S.sort.col === id); const b = h(`<button class="hbtn ${on ? 'on' : ''}" title="מיון וסינון">${esc(c ? c.title : S.nameTitle)}${S.sort && S.sort.col === id ? (S.sort.dir > 0 ? ' ↑' : ' ↓') : ''}${S.filters[id] ? ' ' + icon.filter : ''}</button>`); b.addEventListener('click', (e) => colMenu(e.currentTarget, c)); const d = h(`<div class="cell ${c ? '' : 'name'}"></div>`); d.appendChild(b); return d; };
+        const head = h(`<div class="row head" style="grid-template-columns:${tpl}"></div>`);
+        head.appendChild(hcell(null));
+        S.columns.forEach((c) => head.appendChild(hcell(c)));
         box.appendChild(head);
         rows.forEach((it) => box.appendChild(renderRow(it, S.columns, tpl)));
         const add = h(`<div class="addrow"><label class="sr" for="add-${g.id}">הוספת לקוח לקבוצה ${esc(g.title)}</label><input id="add-${g.id}" placeholder="+ הוספת לקוח"></div>`);
@@ -316,8 +429,13 @@
       const ids = v || [];
       const cell = h(`<div class="cell"><button class="edit people" aria-label="${esc(c.title)}: ${esc(cellText(c, v) || 'ריק')}"></button></div>`);
       const b = cell.querySelector('button');
-      ids.forEach((id) => { const p = S.people[id] || { name: id }; b.appendChild(h(`<span class="avatar" title="${esc(p.name)}">${p.photo ? `<img alt="" src="${esc(p.photo)}">` : esc(initials(p.name))}</span>`)); });
+      ids.forEach((id) => { const n = personName(id); b.appendChild(h(`<span class="pchip" style="--pc:${personColor(id)}"><span class="avatar" style="background:${personColor(id)}">${esc(initials(n))}</span>${ids.length === 1 ? esc(n) : ''}</span>`)); });
       b.addEventListener('click', (e) => peoplePicker(e.currentTarget, ids, async (nids) => { await setVal(it, c.id, nids); rerender(); }));
+      return cell;
+    }
+    if (c.type === 'phone' && v) {
+      const cell = h(`<div class="cell phonecell"><button class="edit" dir="ltr" title="עריכה">${esc(fmtPhone(v))}</button><a class="wa" href="${esc(waUrl(v))}" target="_blank" rel="noopener" aria-label="וואטסאפ ל-${esc(it.name)}">${icon.wa}</a></div>`);
+      cell.querySelector('button').addEventListener('click', () => editText(cell, v, async (nv) => { await setVal(it, c.id, nv); rerender(); }, 'tel'));
       return cell;
     }
     const cls = c.type === 'numbers' ? 'num' : c.type === 'date' ? 'date' : '';
@@ -383,7 +501,7 @@
   }
   function groupPicker(anchor, it) {
     const el = h('<div class="pop" role="dialog" aria-label="העברה לקבוצה"></div>');
-    S.groups.forEach((g) => { const b = h(`<button class="opt"><span class="dot" style="width:12px;height:12px;border-radius:3px;background:${esc(g.color)}"></span>${esc(g.title)}${g.id === it.group_id ? ' ✓' : ''}</button>`); b.addEventListener('click', async () => { closePop(); await saveItem(it, { group_id: g.id }); renderPanel(); renderContent(); }); el.appendChild(b); });
+    S.groups.forEach((g) => { const b = h(`<button class="opt"><span class="dot" style="width:12px;height:12px;border-radius:3px;background:${esc(g.color)}"></span>${esc(g.title)}${g.id === it.group_id ? ' ✓' : ''}</button>`); b.addEventListener('click', async () => { closePop(); const from = it.group_id; await saveItem(it, { group_id: g.id }); renderPanel(); renderContent(); toast(`הועבר ל"${g.title}"`, async () => { await saveItem(it, { group_id: from }, true); renderPanel(); renderContent(); }); }); el.appendChild(b); });
     openPop(anchor, el);
   }
 
@@ -401,15 +519,18 @@
         const st = stCol ? statusInfo(stCol, it.vals[stCol.id]) : {};
         const pk = pkgCol ? statusInfo(pkgCol, it.vals[pkgCol.id]) : {};
         const ph = it.vals.phone_mkza5fxd || '';
-        const c = h(`<button class="card" style="border-right-color:${esc(g.color)}">
-          <span class="r1"><b>${esc(it.name)}</b><span style="color:#0b63c7;font-size:13px">${S.updCounts[it.id] || 0} עדכונים</span></span>
-          <span style="display:flex;gap:6px;flex-wrap:wrap">${st.text ? `<span class="chip" style="background:${esc(st.color)};color:${ink(st.color)}">${esc(st.text)}</span>` : ''}${pk.text ? `<span class="chip" style="background:${esc(pk.color)};color:${ink(pk.color)}">${esc(pk.text)}</span>` : ''}</span>
-          ${ph ? `<span class="ph">${esc(ph)}</span>` : ''}
-        </button>`);
-        c.addEventListener('click', () => openPanel(it));
+        const c = h(`<div class="card" style="border-right-color:${esc(g.color)}">
+          <button class="r1 open"><b>${esc(it.name)}</b><span style="color:#0b63c7;font-size:13px">${S.updCounts[it.id] || 0} עדכונים</span></button>
+          <span class="chips">${stCol ? `<button class="chip ${st.text ? '' : 'emptychip'}" data-st style="${st.text ? `background:${esc(st.color)};color:${ink(st.color)}` : ''}" aria-label="סטטוס: ${esc(st.text || 'ריק')}, לשינוי">${esc(st.text || '+ סטטוס')}</button>` : ''}${pk.text ? `<span class="chip" style="background:${esc(pk.color)};color:${ink(pk.color)}">${esc(pk.text)}</span>` : ''}</span>
+          ${ph ? `<span class="phrow"><span class="ph" dir="ltr">${esc(fmtPhone(ph))}</span><a class="iconlink" href="${esc(telUrl(ph))}" aria-label="חיוג">${icon.phone}</a><a class="iconlink wa" href="${esc(waUrl(ph))}" target="_blank" rel="noopener" aria-label="וואטסאפ">${icon.wa}</a></span>` : ''}
+        </div>`);
+        c.querySelector('.open').addEventListener('click', () => openPanel(it));
+        const sb2 = c.querySelector('[data-st]');
+        if (sb2) sb2.addEventListener('click', (e) => statusPicker(e.currentTarget, stCol, async (idx) => { await setVal(it, stCol.id, idx == null ? null : { index: idx }); renderContent(); }));
         wrap.appendChild(c);
       });
     });
+    if (!wrap.querySelector('.card')) wrap.appendChild(h('<div class="empty-state">לא נמצאו לקוחות</div>'));
     return wrap;
   }
 
@@ -452,7 +573,7 @@
   async function deleteItem(it) {
     if (!confirm(`למחוק את "${it.name}"? הלקוח יעבור לארכיון ואפשר יהיה לשחזר אותו.`)) return;
     const r = await saveItem(it, { archived: true });
-    if (r) { S.items = S.items.filter((x) => x.id !== it.id); closePanel(); renderContent(); toast('הלקוח הועבר לארכיון'); }
+    if (r) { S.items = S.items.filter((x) => x.id !== it.id); closePanel(); renderContent(); toast('הלקוח נמחק', async () => { const b = await saveItem(it, { archived: false }, true); if (b) { S.items.push(it); S.items.sort((a, c) => a.position - c.position); renderContent(); toast('הלקוח הוחזר'); } }); }
   }
 
   /* ---------- side panel ---------- */
@@ -473,7 +594,7 @@
     p.innerHTML = '';
     const head = h(`<header>
       <div class="ptitle"><button class="iconbtn" data-act="close" aria-label="סגירה">${icon.close}</button><label class="sr" for="pname">שם הלקוח</label><input id="pname"><button class="iconbtn" data-act="del" aria-label="מחיקת לקוח">${icon.trash}</button></div>
-      <div style="display:flex;align-items:center;gap:8px;padding:0 6px"><button class="btn text" data-act="group" style="color:${darken(g.color)}">● ${esc(g.title || '')}</button></div>
+      <div class="psum"><button class="btn text" data-act="group" style="color:${darken(g.color)}">● ${esc(g.title || '')}</button></div>
       <div class="tabs" role="tablist">
         <button class="tab" role="tab" data-tab="updates">עדכונים (${S.updCounts[it.id] || 0})</button>
         <button class="tab" role="tab" data-tab="details">פרטים</button>
@@ -485,6 +606,16 @@
     head.querySelector('[data-act=close]').addEventListener('click', closePanel);
     head.querySelector('[data-act=del]').addEventListener('click', () => deleteItem(it));
     head.querySelector('[data-act=group]').addEventListener('click', (e) => groupPicker(e.currentTarget, it));
+    const psum = head.querySelector('.psum');
+    ['status', 'color_mkzacdbj', 'color_mkzan83x'].forEach((cid) => {
+      const c = colOf(S.columns, cid); if (!c) return;
+      const si = statusInfo(c, it.vals[cid]);
+      const b = h(`<button class="chip ${si.text ? '' : 'emptychip'}" style="${si.text ? `background:${esc(si.color)};color:${ink(si.color)}` : ''}" title="${esc(c.title)}" aria-label="${esc(c.title)}: ${esc(si.text || 'ריק')}">${esc(si.text || '+ ' + c.title)}</button>`);
+      b.addEventListener('click', (e) => statusPicker(e.currentTarget, c, async (idx) => { await setVal(it, cid, idx == null ? null : { index: idx }); renderPanel(); renderContent(); }));
+      psum.appendChild(b);
+    });
+    const ph = it.vals.phone_mkza5fxd;
+    if (ph) psum.appendChild(h(`<span class="phrow"><span class="ph" dir="ltr">${esc(fmtPhone(ph))}</span><a class="iconlink" href="${esc(telUrl(ph))}" aria-label="חיוג">${icon.phone}</a><a class="iconlink wa" href="${esc(waUrl(ph))}" target="_blank" rel="noopener" aria-label="וואטסאפ">${icon.wa}</a></span>`));
     head.querySelectorAll('[data-tab]').forEach((b) => { b.setAttribute('aria-selected', b.dataset.tab === S.panelTab); b.addEventListener('click', () => { S.panelTab = b.dataset.tab; renderPanel(); }); });
     p.appendChild(head);
     const body = h('<div class="pbody"></div>');
@@ -523,7 +654,7 @@
       inp.value = v == null ? '' : (c.type === 'date' ? String(v).slice(0, 10) : v);
       inp.addEventListener('change', async () => {
         let nv = inp.value.trim(); if (c.type === 'numbers') nv = nv === '' ? null : Number(nv);
-        await setVal(it, c.id, nv); toast('נשמר'); renderContent();
+        await setVal(it, c.id, nv); renderContent();
       });
       if (c.type === 'phone' && v) {
         const num = String(v).replace(/[^\d+]/g, '');
@@ -566,8 +697,9 @@
   }
 
   async function renderUpdates(body, it) {
-    const comp = h(`<div class="composer"><label class="sr" for="newupd">עדכון חדש</label><textarea id="newupd" placeholder="כתוב עדכון על הלקוח..."></textarea><div class="acts"><button class="btn">פרסום עדכון</button></div></div>`);
-    comp.querySelector('button').addEventListener('click', async () => {
+    const comp = h(`<div class="composer"><label class="sr" for="newupd">עדכון חדש</label><textarea id="newupd" placeholder="כתוב עדכון על הלקוח..."></textarea><div class="acts"><button class="btn" data-post>פרסום עדכון</button></div></div>`);
+    mentionButtons(comp);
+    comp.querySelector('[data-post]').addEventListener('click', async () => {
       const t = comp.querySelector('textarea').value.trim(); if (!t) return;
       await addUpdate(it, t, null); renderPanel();
     });
@@ -589,8 +721,9 @@
       const rb = h('<button class="btn text">השב</button>');
       rb.addEventListener('click', () => {
         rb.remove();
-        const f = h(`<div class="composer" style="margin:10px 0 0"><label class="sr" for="rep-${u.id}">תגובה</label><textarea id="rep-${u.id}" placeholder="כתוב תגובה..." style="min-height:60px"></textarea><div class="acts"><button class="btn">שליחה</button></div></div>`);
-        f.querySelector('button').addEventListener('click', async () => { const t = f.querySelector('textarea').value.trim(); if (t) { await addUpdate(it, t, u.id); renderPanel(); } });
+        const f = h(`<div class="composer" style="margin:10px 0 0"><label class="sr" for="rep-${u.id}">תגובה</label><textarea id="rep-${u.id}" placeholder="כתוב תגובה..." style="min-height:60px"></textarea><div class="acts"><button class="btn" data-post>שליחה</button></div></div>`);
+        mentionButtons(f);
+        f.querySelector('[data-post]').addEventListener('click', async () => { const t = f.querySelector('textarea').value.trim(); if (t) { await addUpdate(it, t, u.id); renderPanel(); } });
         card.appendChild(f); f.querySelector('textarea').focus();
       });
       card.appendChild(rb);
@@ -605,7 +738,7 @@
   function updBody(u) {
     const d = h('<div class="body"></div>');
     d.innerHTML = window.DOMPurify.sanitize(u.body || '', { ADD_ATTR: ['target'] });
-    d.querySelectorAll('a').forEach((a) => { a.target = '_blank'; a.rel = 'noopener'; });
+    d.querySelectorAll('a').forEach((a) => { if (a.classList.contains('user_mention_editor')) { a.removeAttribute('href'); a.className = 'mention'; return; } a.target = '_blank'; a.rel = 'noopener'; });
     return d;
   }
   function updTools(u, it, isReply) {
@@ -625,7 +758,19 @@
     }
     return t;
   }
-  const textToHtml = (t) => '<div dir="rtl">' + t.split(/\n/).map((l) => `<p>${esc(l) || '&nbsp;'}</p>`).join('') + '</div>';
+  const textToHtml = (t) => {
+    let html = '<div dir="rtl">' + t.split(/\n/).map((l) => `<p>${esc(l) || '&nbsp;'}</p>`).join('') + '</div>';
+    S.members.filter((m) => m.person_id).forEach((m) => { html = html.split(esc('@' + m.name)).join(`<a class="user_mention_editor" data-mention-type="User" data-mention-id="${esc(m.person_id)}">@${esc(m.name)}</a>`); });
+    return html;
+  };
+  function mentionButtons(comp) {
+    const acts = comp.querySelector('.acts'); const ta = comp.querySelector('textarea');
+    S.members.filter((m) => m.user_id !== S.user.id && m.person_id).forEach((m) => {
+      const b = h(`<button class="btn ghost small" type="button" title="תיוג: ${esc(m.name)} יראה את זה ב'מה דחוף'">@${esc(m.name)}</button>`);
+      b.addEventListener('click', () => { const pos = ta.selectionStart ?? ta.value.length; const ins = (pos && !/\s$/.test(ta.value.slice(0, pos)) ? ' ' : '') + '@' + m.name + ' '; ta.value = ta.value.slice(0, pos) + ins + ta.value.slice(pos); ta.focus(); ta.selectionStart = ta.selectionEnd = pos + ins.length; });
+      acts.appendChild(b);
+    });
+  }
   async function addUpdate(it, text, parentId) {
     const { error } = await sb.from('rys_updates').insert({ item_id: it.id, parent_id: parentId, body: textToHtml(text), creator_id: S.me.person_id, creator_name: S.me.name });
     if (error) return toast('הפרסום נכשל: ' + error.message);
@@ -656,6 +801,73 @@
     body.appendChild(ul);
   }
 
+
+
+  /* ---------- what's urgent ---------- */
+  function myMentions() {
+    if (!S.me || !S.me.person_id || !S.allUpdates) return [];
+    const tag = `data-mention-id="${S.me.person_id}"`;
+    const live = new Set(S.items.map((i) => i.id));
+    const since = new Date(Date.now() - 14 * 864e5).toISOString();
+    return S.allUpdates.filter((u) => live.has(u.item_id) && u.created_at >= since && (u.body || '').includes(tag) && !S.mentionDone.has(String(u.id)) && String(u.creator_id) !== String(S.me.person_id))
+      .sort((a, b) => b.created_at.localeCompare(a.created_at));
+  }
+  function renderBadge() {
+    const n = myMentions().length;
+    document.querySelectorAll('[data-badge]').forEach((b) => { b.hidden = !n; b.textContent = n; });
+  }
+  function urgentRow(it, extra) {
+    const g = S.groups.find((x) => x.id === it.group_id) || {};
+    const lu = S.lastUpd[it.id];
+    const r = h(`<button class="urow" style="border-right-color:${esc(g.color || '#ccc')}"><span class="u1"><b>${esc(it.name)}</b><span class="ud">${extra || ''}</span></span>${lu ? `<span class="u2">${esc(lu.who || '')}: ${esc(lu.text.slice(0, 120))}${lu.text.length > 120 ? '…' : ''}</span>` : ''}</button>`);
+    r.addEventListener('click', () => openPanel(it));
+    return r;
+  }
+  function renderUrgent() {
+    const wrap = h('<div class="urgent"></div>');
+    const sec = (title, sub, count) => { const x = h(`<section class="usec"><h2>${title} <span class="cnt">${count}</span></h2>${sub ? `<p class="usub">${sub}</p>` : ''}</section>`); wrap.appendChild(x); return x; };
+    // 1. mentions
+    const ms = myMentions();
+    const m = sec('תייגו אותך', ms.length ? 'מ-14 הימים האחרונים. "טופל" מוריד מהרשימה.' : '', ms.length);
+    if (!ms.length) m.appendChild(h('<p class="usub">אין תיוגים פתוחים 🎉</p>'));
+    ms.forEach((u) => {
+      const it = S.items.find((i) => i.id === u.item_id); if (!it) return;
+      const card = h(`<div class="mrowc"><button class="urow" style="border-right-color:#a25ddc"><span class="u1"><b>${esc(it.name)}</b><span class="ud">${esc(u.creator_name || personName(u.creator_id))} · ${esc(fmtWhen(u.created_at))}</span></span><span class="u2">${esc(plain(u.body).slice(0, 220))}</span></button><button class="btn ghost" data-done>טופל ✓</button></div>`);
+      card.querySelector('.urow').addEventListener('click', () => openPanel(it));
+      card.querySelector('[data-done]').addEventListener('click', async () => {
+        const { error } = await sb.from('rys_mention_done').insert({ update_id: u.id });
+        if (error) return toast('לא נשמר: ' + error.message);
+        S.mentionDone.add(String(u.id)); renderContent();
+        toast('סומן כטופל', async () => { await sb.from('rys_mention_done').delete().eq('update_id', u.id); S.mentionDone.delete(String(u.id)); renderContent(); });
+      });
+      m.appendChild(card);
+    });
+    // 2. stuck
+    const active = ['topics', 'group_mkzreqf8'];
+    const stuck = S.items.filter((i) => active.includes(i.group_id) && daysAgo(S.lastAct[i.id] || i.updated_at) >= S.staleDays)
+      .sort((a, b) => (S.lastAct[a.id] || '').localeCompare(S.lastAct[b.id] || ''));
+    const st = sec(`לא זזו ${S.staleDays} ימים או יותר`, '', stuck.length);
+    const sel = h(`<label class="usub" style="display:flex;gap:8px;align-items:center">לקוחות בקליטה ובתהליך שלא היה בהם שינוי או עדכון מעל <select>${[3, 7, 14, 30].map((d) => `<option value="${d}" ${d === S.staleDays ? 'selected' : ''}>${d} ימים</option>`).join('')}</select></label>`);
+    sel.querySelector('select').addEventListener('change', (e) => { S.staleDays = Number(e.target.value); try { localStorage.setItem('rys_stale', S.staleDays); } catch (x) {} renderContent(); });
+    st.appendChild(sel);
+    stuck.forEach((it) => st.appendChild(urgentRow(it, `${daysAgo(S.lastAct[it.id])} ימים בלי תזוזה`)));
+    // 3. waiting statuses
+    const stCol = colOf(S.columns, 'status');
+    if (stCol) ['7', '6', '2'].forEach((idx) => {
+      const label = (stCol.settings.labels || {})[idx]; if (!label) return;
+      const rows = S.items.filter((i) => i.vals.status && String(i.vals.status.index) === idx).sort((a, b) => (S.lastAct[a.id] || '').localeCompare(S.lastAct[b.id] || ''));
+      if (!rows.length) return;
+      const x = sec(esc(label), '', rows.length);
+      rows.forEach((it) => x.appendChild(urgentRow(it, `${daysAgo(S.lastAct[it.id])} ימים מאז שינוי אחרון`)));
+    });
+    // 4. not delivered
+    const dl = colOf(S.columns, 'color_mkzan83x');
+    if (dl) {
+      const rows = S.items.filter((i) => i.group_id !== 'group_mm1qdp4y' && i.vals.color_mkzan83x && String(i.vals.color_mkzan83x.index) === '2');
+      if (rows.length) { const x = sec('טרם סופק', 'לקוחות (לא מבוטלים) שסטטוס האספקה שלהם "טרם סופק".', rows.length); rows.forEach((it) => x.appendChild(urgentRow(it, (S.groups.find((g) => g.id === it.group_id) || {}).title || ''))); }
+    }
+    return wrap;
+  }
 
   /* ---------- ask the system (Claude) ---------- */
   const ASK = { turns: [], busy: false };
@@ -755,7 +967,7 @@
       .on('postgres_changes', { event: '*', schema: 'public', table: 'rys_updates' }, refresh).subscribe();
   }
 
-  const api = { ink, sb, S, C, h, esc, toast, icon, loadAll, statusOptions, fmtWhen, rerender: () => renderContent() };
+  const api = { ink, sb, S, C, h, esc, toast, icon, loadAll, statusOptions, fmtWhen, cellText, plain, rerender: () => renderContent() };
 
   sb.auth.onAuthStateChange((_e, session) => { setTimeout(() => start(session), 0); });
   sb.auth.getSession().then(({ data }) => start(data.session));

@@ -12,6 +12,7 @@ window.RYS_ADMIN = (function () {
 
     // my password: everyone
     wrap.appendChild(myPassword(A));
+    wrap.appendChild(exportCard(A));
     const designer = me.is_admin || me.can_design;
     if (!designer) { wrap.appendChild(h('<p style="color:#62636f">את שאר ההגדרות יכול לשנות רק מנהל המערכת.</p>')); return; }
     if (me.is_admin) wrap.appendChild(await usersCard(A));
@@ -200,6 +201,30 @@ window.RYS_ADMIN = (function () {
         box.appendChild(r);
       });
     })();
+    return c;
+  }
+
+  function exportCard(A) {
+    const { h, S, toast } = A;
+    const c = card(h, 'גיבוי וייצוא', 'גיבוי אוטומטי של כל הנתונים רץ כל לילה ונשמר 7 ימים, ועותק שבועי נשמר בנפרד. אפשר גם להוריד הכל לאקסל.');
+    const b = h('<button class="btn ghost">ייצוא לאקסל</button>');
+    b.addEventListener('click', async () => {
+      b.disabled = true;
+      try {
+        if (!window.XLSX) await new Promise((ok, no) => { const s = document.createElement('script'); s.src = 'vendor/xlsx.full.min.js'; s.onload = ok; s.onerror = no; document.head.appendChild(s); });
+        const gName = (list, id) => (list.find((g) => g.id === id) || {}).title || '';
+        const name = (id) => (S.items.find((i) => i.id === id) || {}).name || '';
+        const rows = (items, groups, cols, extra) => items.map((i) => { const r = { 'שם': i.name, 'קבוצה': gName(groups, i.group_id) }; if (extra) Object.assign(r, extra(i)); cols.forEach((col) => { const v = i.vals[col.id]; r[col.title] = col.type === 'numbers' && v !== '' && v != null && !isNaN(v) ? Number(v) : A.cellText(col, v); }); return r; });
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows(S.items, S.groups, S.columns)), 'לקוחות');
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows(S.subitems, S.subGroups, S.subColumns, (i) => ({ 'לקוח': name(i.parent_item_id) }))), 'תשלומים');
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(S.allUpdates.map((u) => ({ 'לקוח': name(u.item_id), 'נכתב ע"י': u.creator_name || '', 'תאריך': A.fmtWhen(u.created_at), 'עדכון': A.plain(u.body) }))), 'עדכונים');
+        wb.Workbook = { Views: [{ RTL: true }] };
+        XLSX.writeFile(wb, `RYS-${new Date().toISOString().slice(0, 10)}.xlsx`);
+      } catch (e) { toast('הייצוא נכשל'); }
+      b.disabled = false;
+    });
+    c.appendChild(b);
     return c;
   }
 
