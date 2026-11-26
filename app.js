@@ -209,7 +209,6 @@
         <button class="navbtn" data-view="table" aria-label="טבלה">${icon.board}</button>
         <button class="navbtn" data-view="kanban" aria-label="קנבן">${icon.kanban}</button>
         <button class="navbtn" data-view="urgent" aria-label="מה דחוף">${icon.bell}<span class="badge" data-badge hidden></span></button>
-        <button class="navbtn ask" data-act="ask" aria-label="שאל את המערכת">${icon.spark}</button>
         <button class="navbtn bottom" data-view="admin" aria-label="ניהול והגדרות">${icon.gear}</button>
         <button class="navbtn" data-act="logout" aria-label="התנתקות">${icon.logout}</button>
       </nav>
@@ -226,11 +225,11 @@
         <div class="stats" id="stats"></div>
         <div class="toolbar">
           <button class="btn" data-act="new">${icon.plus} לקוח חדש</button>
-          <button class="btn ghost askbtn" data-act="ask">${icon.spark} שאל את המערכת</button>
           <label class="search">${icon.search}<span class="sr">חיפוש</span><input id="q" type="search" placeholder="חיפוש לפי שם, טלפון, ת״ז, מייל"></label>
         </div>
         <div class="fbar" id="fbar"></div>
         <div class="content" id="content"></div>
+        <button class="fab" data-act="ask" aria-label="שאל את המערכת" title="שאל את המערכת">${icon.spark}<span>שאל</span></button>
       </div>
     </div>`);
     $app.appendChild(shell);
