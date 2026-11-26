@@ -864,7 +864,11 @@
       pend.forEach((it) => {
         const [ph, tz] = key(it);
         const dup = S.items.find((o) => o.id !== it.id && o.group_id !== 'group_pending' && ((ph && key(o)[0] === ph) || (tz && key(o)[1] === tz)));
-        ps.appendChild(urgentRow(it, `${esc(fmtPhone(it.vals.phone_mkza5fxd))}${dup ? ` · <b style="color:var(--danger)">כבר קיים: ${esc(dup.name)}</b>` : ''}`));
+        const row = h('<div class="mrowc"></div>');
+        row.appendChild(urgentRow(it, `${esc(fmtPhone(it.vals.phone_mkza5fxd))}${dup ? ` · <b style="color:var(--danger)">כבר קיים: ${esc(dup.name)}</b>` : ''}`));
+        const ok = h('<button class="btn" title="הסטטוס יהיה בתהליך והלקוח יעבור לקבוצת בתהליך">אישור</button>');
+        ok.addEventListener('click', async () => { ok.disabled = true; await setVal(it, 'status', { index: '3' }); renderContent(); });
+        row.appendChild(ok); ps.appendChild(row);
       });
     }
     // 1. mentions

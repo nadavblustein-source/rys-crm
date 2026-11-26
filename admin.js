@@ -83,12 +83,22 @@ window.RYS_ADMIN = (function () {
     const c = card(h, 'קבוצות', 'שינוי שם, צבע וסדר של הקבוצות בלוח, והוספת קבוצה חדשה.');
     const list = S.groups.slice().sort((a, b) => a.position - b.position);
     list.forEach((g, i) => {
-      const r = h(`<div style="${rowStyle}"><button class="btn ghost" data-a="color" aria-label="צבע" style="width:44px;padding:0"><span style="width:20px;height:20px;border-radius:5px;background:${esc(g.color)}"></span></button><input value="${esc(g.title)}" aria-label="שם הקבוצה" style="${inputStyle};flex:1;min-width:160px"><span style="color:#62636f;font-size:13px">${S.items.filter((x) => x.group_id === g.id).length} לקוחות</span><button class="btn ghost" data-a="up" aria-label="למעלה" ${i === 0 ? 'disabled' : ''}>▲</button><button class="btn ghost" data-a="down" aria-label="למטה" ${i === list.length - 1 ? 'disabled' : ''}>▼</button></div>`);
+      const r = h(`<div style="${rowStyle}"><button class="btn ghost" data-a="color" aria-label="צבע" style="width:44px;padding:0"><span style="width:20px;height:20px;border-radius:5px;background:${esc(g.color)}"></span></button><input value="${esc(g.title)}" aria-label="שם הקבוצה" style="${inputStyle};flex:1;min-width:160px"><span style="color:#62636f;font-size:13px">${S.items.filter((x) => x.group_id === g.id).length} לקוחות</span><button class="btn ghost" data-a="up" aria-label="למעלה" ${i === 0 ? 'disabled' : ''}>▲</button><button class="btn ghost" data-a="down" aria-label="למטה" ${i === list.length - 1 ? 'disabled' : ''}>▼</button>${S.items.some((x) => x.group_id === g.id) ? '' : '<button class="btn danger" data-a="del">מחיקה</button>'}</div>`);
       r.querySelector('input').addEventListener('change', async (e) => { await upd('rys_groups', g, { title: e.target.value.trim() }); });
       r.querySelector('[data-a=color]').addEventListener('click', (e) => colorPick(A, e.currentTarget, async (col) => { await upd('rys_groups', g, { color: col }); A.rerender(); }));
       const swap = async (j) => { const o = list[j]; const a = g.position; await upd('rys_groups', g, { position: o.position }); await upd('rys_groups', o, { position: a }); S.groups.sort((x, y) => x.position - y.position); A.rerender(); };
       r.querySelector('[data-a=up]').addEventListener('click', () => swap(i - 1));
       r.querySelector('[data-a=down]').addEventListener('click', () => swap(i + 1));
+      const del = r.querySelector('[data-a=del]');
+      if (del) del.addEventListener('click', async () => {
+        const { count } = await sb.from('rys_items').select('id', { count: 'exact', head: true }).eq('board_id', g.board_id).eq('group_id', g.id);
+        if (count) return toast('יש בקבוצה לקוחות (גם בסל המחזור), אי אפשר למחוק');
+        if (!confirm(`למחוק את הקבוצה "${g.title}"?`)) return;
+        await sb.from('rys_automations').update({ active: false }).eq('board_id', g.board_id).eq('target_group_id', g.id);
+        const { data, error } = await sb.from('rys_groups').delete().eq('board_id', g.board_id).eq('id', g.id).select();
+        if (error || !data || !data.length) return toast(error ? error.message : 'אין הרשאה למחוק קבוצה');
+        S.groups = S.groups.filter((x) => x !== g); toast('הקבוצה נמחקה'); A.rerender();
+      });
       c.appendChild(r);
     });
     const add = h(`<form style="display:flex;gap:10px;margin-top:14px"><label class="sr" for="ng">שם קבוצה חדשה</label><input id="ng" required placeholder="שם קבוצה חדשה" style="${inputStyle};flex:1"><button class="btn">הוספת קבוצה</button></form>`);
