@@ -93,7 +93,7 @@ window.RYS_ADMIN = (function () {
       if (del) del.addEventListener('click', async () => {
         const { count } = await sb.from('rys_items').select('id', { count: 'exact', head: true }).eq('board_id', g.board_id).eq('group_id', g.id);
         if (count) return toast('יש בקבוצה לקוחות (גם בסל המחזור), אי אפשר למחוק');
-        if (!confirm(`למחוק את הקבוצה "${g.title}"?`)) return;
+        if (!del.dataset.sure) { del.dataset.sure = '1'; del.textContent = 'בטוח? ללחוץ שוב'; return; }
         await sb.from('rys_automations').update({ active: false }).eq('board_id', g.board_id).eq('target_group_id', g.id);
         const { data, error } = await sb.from('rys_groups').delete().eq('board_id', g.board_id).eq('id', g.id).select();
         if (error || !data || !data.length) return toast(error ? error.message : 'אין הרשאה למחוק קבוצה');
