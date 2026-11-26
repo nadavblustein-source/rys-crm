@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>פרטים להזמנה · Restart your soul</title>
+<meta name="theme-color" content="#292f4c">
+<meta name="robots" content="noindex">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#f5f6fa;--ink:#2b2c33;--muted:#62636f;--primary:#0b63c7;--danger:#c4314b;--line:#c6c9d6}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:Heebo,system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:16px;-webkit-text-size-adjust:100%}
+  main{max-width:520px;margin:0 auto;padding:28px 16px 48px}
+  h1{margin:0 0 4px;font-size:26px}
+  .lead{margin:0 0 22px;color:var(--muted)}
+  form{background:#fff;border-radius:18px;padding:22px 18px;display:flex;flex-direction:column;gap:16px;box-shadow:0 6px 24px rgba(20,24,40,.06)}
+  label{display:flex;flex-direction:column;gap:6px;font-size:14px;color:var(--muted)}
+  label b{color:var(--danger);font-weight:500}
+  input,select{font:inherit;color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:11px 12px;min-height:48px;background:#fff;width:100%}
+  input:focus,select:focus{outline:3px solid #8bb8f0;outline-offset:0;border-color:var(--primary)}
+  input[dir=ltr]{text-align:right}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  button{font:inherit;border:0;border-radius:12px;min-height:52px;background:var(--primary);color:#fff;font-weight:500;font-size:17px;cursor:pointer;margin-top:4px}
+  button:disabled{opacity:.6}
+  .err{color:var(--danger);font-size:14px;min-height:1em;margin:0}
+  .hp{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);opacity:0}
+  .done{background:#fff;border-radius:18px;padding:36px 20px;text-align:center;box-shadow:0 6px 24px rgba(20,24,40,.06)}
+  .done .ok{width:64px;height:64px;border-radius:50%;background:#00c875;color:#fff;font-size:34px;display:flex;align-items:center;justify-content:center;margin:0 auto 14px}
+  .done h2{margin:0 0 6px}
+  .done p{margin:0;color:var(--muted)}
+  @media (max-width:420px){.row{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<main>
+  <h1>פרטים להזמנה</h1>
+  <p class="lead">Restart your soul</p>
+  <form id="f" novalidate>
+    <label><span>שם מלא (כמו בחשבונית) <b aria-hidden="true">*</b></span><input name="name" required autocomplete="name" maxlength="120"></label>
+    <div class="row">
+      <label><span>טלפון נייד <b aria-hidden="true">*</b></span><input name="phone" required type="tel" inputmode="tel" autocomplete="tel" dir="ltr" placeholder="050-000-0000"></label>
+      <label><span>ת״ז <b aria-hidden="true">*</b></span><input name="tz" required inputmode="numeric" maxlength="9" dir="ltr"></label>
+    </div>
+    <label>מייל<input name="email_mkzappb7" type="email" autocomplete="email" dir="ltr"></label>
+    <div class="row">
+      <label>עיר<input name="text_mkzataf7" autocomplete="address-level2"></label>
+      <label>כתובת מלאה<input name="text_mkzaysa6" autocomplete="street-address"></label>
+    </div>
+    <label><span data-t="color_mkzacdbj">סוג חבילה</span><select name="color_mkzacdbj"><option value="">בחירה</option></select></label>
+    <label><span data-t="color_mkzbscf7">צבע מכשיר</span><select name="color_mkzbscf7"><option value="">בחירה</option></select></label>
+    <label><span data-t="color_mkzbejpk">אופן אספקה</span><select name="color_mkzbejpk"><option value="">בחירה</option></select></label>
+    <label class="hp" aria-hidden="true">אתר<input name="website" tabindex="-1" autocomplete="off"></label>
+    <p class="err" id="err" role="alert"></p>
+    <button id="send">שליחה</button>
+  </form>
+</main>
+<script src="config.js"></script>
+<script>
+(function () {
+  const C = window.RYS_CONFIG;
+  const rpc = (fn, body) => fetch(`${C.supabaseUrl}/rest/v1/rpc/${fn}`, { method: 'POST', headers: { apikey: C.supabaseKey, 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
+  const f = document.getElementById('f'), err = document.getElementById('err'), btn = document.getElementById('send');
+  rpc('rys_form_options').then((r) => r.json()).then((o) => {
+    Object.entries(o || {}).forEach(([id, c]) => {
+      const sel = f.elements[id]; if (!sel) return;
+      const t = document.querySelector(`[data-t="${id}"]`); if (t && c.title) t.textContent = c.title;
+      Object.entries(c.labels || {}).filter(([, v]) => v).forEach(([k, v]) => { const op = document.createElement('option'); op.value = k; op.textContent = v; sel.appendChild(op); });
+    });
+  }).catch(() => {});
+  f.addEventListener('submit', async (e) => {
+    e.preventDefault(); err.textContent = '';
+    const v = Object.fromEntries(new FormData(f).entries());
+    if (v.website) return;
+    const phone = (v.phone || '').replace(/\D/g, ''), tz = (v.tz || '').replace(/\D/g, '');
+    if ((v.name || '').trim().length < 2) { err.textContent = 'נא למלא שם מלא'; f.elements.name.focus(); return; }
+    if (!/^(05\d{8}|9725\d{8})$/.test(phone)) { err.textContent = 'נא למלא מספר נייד תקין'; f.elements.phone.focus(); return; }
+    if (!/^\d{5,9}$/.test(tz)) { err.textContent = 'נא למלא ת״ז תקינה'; f.elements.tz.focus(); return; }
+    btn.disabled = true; btn.textContent = 'שולח...';
+    try {
+      const r = await rpc('rys_submit_form', { p: v });
+      if (!r.ok) throw new Error();
+      f.outerHTML = '<div class="done" role="status"><div class="ok" aria-hidden="true">✓</div><h2>תודה, קיבלנו!</h2><p>נחזור אליך בהקדם.</p></div>';
+    } catch (x) { err.textContent = 'השליחה נכשלה, נסו שוב בעוד רגע'; btn.disabled = false; btn.textContent = 'שליחה'; }
+  });
+})();
+</script>
+</body>
+</html>

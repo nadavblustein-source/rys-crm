@@ -12,6 +12,7 @@ window.RYS_ADMIN = (function () {
 
     // my password: everyone
     wrap.appendChild(myPassword(A));
+    wrap.appendChild(formCard(A));
     wrap.appendChild(exportCard(A));
     const designer = me.is_admin || me.can_design;
     if (!designer) { wrap.appendChild(h('<p style="color:#62636f">את שאר ההגדרות יכול לשנות רק מנהל המערכת.</p>')); return; }
@@ -201,6 +202,17 @@ window.RYS_ADMIN = (function () {
         box.appendChild(r);
       });
     })();
+    return c;
+  }
+
+  function formCard(A) {
+    const { h, esc, toast } = A;
+    const url = new URL('form.html', location.href.split('#')[0]).href;
+    const c = card(h, 'טופס ללקוחות', 'שולחים ללקוח את הקישור. מה שהוא ממלא נכנס כלקוח חדש בקבוצה "ממתין לאישור" ומופיע ב"מה דחוף".');
+    const msg = 'היי, כדי להתקדם עם ההזמנה נשמח שתמלא/י את הפרטים כאן: ' + url;
+    const r = h(`<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><a href="${esc(url)}" target="_blank" rel="noopener" dir="ltr" style="flex:1 1 260px;word-break:break-all">${esc(url)}</a><button class="btn ghost" data-a="copy">העתקת קישור</button><a class="btn ghost" href="https://wa.me/?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener" style="text-decoration:none">שליחה בוואטסאפ</a></div>`);
+    r.querySelector('[data-a=copy]').addEventListener('click', async () => { try { await navigator.clipboard.writeText(url); toast('הקישור הועתק'); } catch (e) { toast(url); } });
+    c.appendChild(r);
     return c;
   }
 

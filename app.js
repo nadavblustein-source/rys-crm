@@ -848,7 +848,7 @@
       .sort((a, b) => b.created_at.localeCompare(a.created_at));
   }
   function renderBadge() {
-    const n = myMentions().length;
+    const n = myMentions().length + S.items.filter((i) => i.group_id === 'group_pending').length;
     document.querySelectorAll('[data-badge]').forEach((b) => { b.hidden = !n; b.textContent = n; });
   }
   function urgentRow(it, extra) {
@@ -861,6 +861,17 @@
   function renderUrgent() {
     const wrap = h('<div class="urgent"></div>');
     const sec = (title, sub, count) => { const x = h(`<section class="usec"><h2>${title} <span class="cnt">${count}</span></h2>${sub ? `<p class="usub">${sub}</p>` : ''}</section>`); wrap.appendChild(x); return x; };
+    // 0. new from the customer form
+    const pend = S.items.filter((i) => i.group_id === 'group_pending');
+    if (pend.length) {
+      const ps = sec('חדשים מהטופס', 'ממתינים לאישור שלך. פותחים, בודקים ומעבירים קבוצה.', pend.length);
+      const key = (i) => [phoneDigits(i.vals.phone_mkza5fxd || '').slice(-9), String(i.vals.text_mkzbq48j || '')];
+      pend.forEach((it) => {
+        const [ph, tz] = key(it);
+        const dup = S.items.find((o) => o.id !== it.id && o.group_id !== 'group_pending' && ((ph && key(o)[0] === ph) || (tz && key(o)[1] === tz)));
+        ps.appendChild(urgentRow(it, `${esc(fmtPhone(it.vals.phone_mkza5fxd))}${dup ? ` · <b style="color:var(--danger)">כבר קיים: ${esc(dup.name)}</b>` : ''}`));
+      });
+    }
     // 1. mentions
     const ms = myMentions();
     const m = sec('תייגו אותך', ms.length ? 'מ-14 הימים האחרונים. "טופל" מוריד מהרשימה.' : '', ms.length);
@@ -899,7 +910,7 @@
     const dl = colOf(S.columns, 'color_mkzan83x');
     if (dl) {
       const rows = S.items.filter((i) => i.group_id !== 'group_mm1qdp4y' && i.vals.color_mkzan83x && String(i.vals.color_mkzan83x.index) === '2');
-      if (rows.length) { const x = sec('טרם סופק', 'לקוחות (לא מבוטלים) שסטטוס האספקה שלהם "טרם סופק".', rows.length); rows.forEach((it) => x.appendChild(urgentRow(it, (S.groups.find((g) => g.id === it.group_id) || {}).title || ''))); }
+      if (rows.length) { const x = sec('טרם סופק', 'לקוחות (לא מבוטלים) שסטטוס האספקה שלהם "טרם סופק".', rows.length); rows.forEach((it) => x.appendChild(urgentRow(it, esc((S.groups.find((g) => g.id === it.group_id) || {}).title || '')))); }
     }
     return wrap;
   }
