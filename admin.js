@@ -230,7 +230,7 @@ window.RYS_ADMIN = (function () {
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows(S.items, S.groups, S.columns)), 'לקוחות');
         XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows(S.subitems, S.subGroups, S.subColumns, (i) => ({ 'לקוח': name(i.parent_item_id) }))), 'תשלומים');
-        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(S.allUpdates.map((u) => ({ 'לקוח': name(u.item_id), 'נכתב ע"י': u.creator_name || '', 'תאריך': A.fmtWhen(u.created_at), 'עדכון': A.plain(u.body) }))), 'עדכונים');
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(S.allUpdates.map((u) => ({ 'לקוח': name(u.item_id), 'נכתב ע"י': A.authorName(u), 'תאריך': A.fmtWhen(u.created_at), 'עדכון': A.plain(u.body) }))), 'עדכונים');
         wb.Workbook = { Views: [{ RTL: true }] };
         XLSX.writeFile(wb, `RYS-${new Date().toISOString().slice(0, 10)}.xlsx`);
       } catch (e) { toast('הייצוא נכשל'); }

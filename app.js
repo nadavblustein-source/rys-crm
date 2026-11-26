@@ -61,6 +61,7 @@
   const telUrl = (v) => 'tel:' + phoneDigits(v);
   const memberOf = (personId) => S.members.find((m) => String(m.person_id) === String(personId));
   const personName = (id) => { const m = memberOf(id); return m ? m.name : ((S.people[id] || {}).name || id); };
+  const authorName = (u) => { const m = memberOf(u.creator_id); return m ? m.name : (u.creator_name || (S.people[u.creator_id] || {}).name || 'משתמש'); };
   const PCOL = ['#0b63c7', '#e2445c', '#00a36c', '#a25ddc', '#fd8c3d', '#037f9c', '#bb3354', '#5559df'];
   const personColor = (id) => { const i = S.members.findIndex((m) => String(m.person_id) === String(id)); if (i >= 0) return PCOL[i % PCOL.length]; let h = 0; for (const ch of String(id)) h = (h * 31 + ch.charCodeAt(0)) | 0; return PCOL[2 + (Math.abs(h) % (PCOL.length - 2))]; };
   const daysAgo = (ts) => Math.floor((Date.now() - new Date(ts).getTime()) / 86400000);
@@ -125,7 +126,7 @@
       if (!u.parent_id) S.updCounts[u.item_id] = (S.updCounts[u.item_id] || 0) + 1;
       const t = plain(u.body);
       S.updText[u.item_id] = (S.updText[u.item_id] || '') + ' ' + t.toLowerCase();
-      if (!S.lastUpd[u.item_id] || u.created_at > S.lastUpd[u.item_id].created_at) S.lastUpd[u.item_id] = { created_at: u.created_at, text: t, who: u.creator_name || personName(u.creator_id) };
+      if (!S.lastUpd[u.item_id] || u.created_at > S.lastUpd[u.item_id].created_at) S.lastUpd[u.item_id] = { created_at: u.created_at, text: t, who: authorName(u) };
     });
     S.items.forEach((i) => { const lu = S.lastUpd[i.id]; S.lastAct[i.id] = lu && lu.created_at > i.updated_at ? lu.created_at : i.updated_at; });
     S.mentionDone = new Set(((md && md.data) || []).map((r) => String(r.update_id)));
@@ -735,8 +736,8 @@
   }
   function updMeta(u) {
     const p = S.people[u.creator_id] || {};
-    const name = u.creator_name || p.name || 'משתמש';
-    return h(`<div class="meta"><span class="avatar">${p.photo ? `<img alt="" src="${esc(p.photo)}">` : esc(initials(name))}</span><span class="who">${esc(name)}</span><span class="when">${esc(fmtWhen(u.created_at))}${u.updated_at && u.updated_at.slice(0, 16) !== u.created_at.slice(0, 16) && u.author_user ? ' (נערך)' : ''}</span></div>`);
+    const name = authorName(u);
+    return h(`<div class="meta"><span class="avatar" style="background:${personColor(u.creator_id)};color:#fff">${esc(initials(name))}</span><span class="who">${esc(name)}</span><span class="when">${esc(fmtWhen(u.created_at))}${u.updated_at && u.updated_at.slice(0, 16) !== u.created_at.slice(0, 16) && u.author_user ? ' (נערך)' : ''}</span></div>`);
   }
   function updBody(u) {
     const d = h('<div class="body"></div>');
@@ -808,10 +809,9 @@
 
   /* ---------- gross profit ---------- */
   function renderProfit() {
-    const PROFIT = 'numeric_mkzbwczt', DATE = 'date4', SRC = 'color_mkza49qs', CANCELED = 'group_mm1qdp4y';
-    const srcCol = colOf(S.columns, SRC) || (S.allColumns || []).find((c) => c.id === SRC);
+    const PROFIT = 'numeric_mkzbwczt', DATE = 'date4', CANCELED = 'group_mm1qdp4y';
     const rows = S.items.filter((i) => i.group_id !== CANCELED && i.vals[PROFIT] !== undefined && i.vals[PROFIT] !== '' && !isNaN(Number(i.vals[PROFIT])))
-      .map((i) => ({ it: i, p: Number(i.vals[PROFIT]), m: String(i.vals[DATE] || '').slice(0, 7), src: srcCol ? statusInfo(srcCol, i.vals[SRC]).text || 'לא ידוע' : 'לא ידוע' }));
+      .map((i) => ({ it: i, p: Number(i.vals[PROFIT]), m: String(i.vals[DATE] || '').slice(0, 7) }));
     const nis = (n) => '₪' + Math.round(n).toLocaleString('he-IL');
     const sum = (a) => a.reduce((t, r) => t + r.p, 0);
     const now = new Date(); const ym = (d) => d.toISOString().slice(0, 7);
@@ -829,11 +829,6 @@
     // table view of the same numbers
     const tbl = h(`<details class="pdet"><summary>הצג כטבלה</summary><table class="ptable"><thead><tr><th>חודש</th><th>עסקאות</th><th>רווח גולמי</th></tr></thead><tbody>${byM.slice().reverse().map((x) => `<tr><td>${esc(mname(x.m))} ${x.m.slice(0, 4)}</td><td>${x.a.length}</td><td>${nis(x.v)}</td></tr>`).join('')}</tbody></table></details>`);
     chart.appendChild(tbl);
-    // by lead source
-    const srcs = {}; rows.forEach((r) => { (srcs[r.src] = srcs[r.src] || []).push(r); });
-    const list = Object.entries(srcs).map(([k, a]) => ({ k, n: a.length, v: sum(a) })).sort((a, b) => b.v - a.v);
-    const smax = Math.max(1, ...list.map((x) => x.v));
-    wrap.appendChild(h(`<section class="pcard"><h2>רווח גולמי לפי מקור ליד</h2><table class="ptable src"><thead><tr><th>מקור</th><th>עסקאות</th><th>ממוצע</th><th>סה״כ</th></tr></thead><tbody>${list.map((x) => `<tr><td>${esc(x.k)}</td><td>${x.n}</td><td>${nis(x.v / x.n)}</td><td><span class="hbar"><span style="width:${(x.v / smax) * 100}%"></span></span>${nis(x.v)}</td></tr>`).join('')}</tbody></table></section>`));
     wrap.appendChild(h(`<p class="usub">לפי "רווח גולמי כולל מע״מ" ו"תאריך רכישה". בלי לקוחות שבוטלו.</p>`));
     return wrap;
   }
@@ -878,7 +873,7 @@
     if (!ms.length) m.appendChild(h('<p class="usub">אין תיוגים פתוחים 🎉</p>'));
     ms.forEach((u) => {
       const it = S.items.find((i) => i.id === u.item_id); if (!it) return;
-      const card = h(`<div class="mrowc"><button class="urow" style="border-right-color:#a25ddc"><span class="u1"><b>${esc(it.name)}</b><span class="ud">${esc(u.creator_name || personName(u.creator_id))} · ${esc(fmtWhen(u.created_at))}</span></span><span class="u2">${esc(plain(u.body).slice(0, 220))}</span></button><button class="btn ghost" data-done>טופל ✓</button></div>`);
+      const card = h(`<div class="mrowc"><button class="urow" style="border-right-color:#a25ddc"><span class="u1"><b>${esc(it.name)}</b><span class="ud">${esc(authorName(u))} · ${esc(fmtWhen(u.created_at))}</span></span><span class="u2">${esc(plain(u.body).slice(0, 220))}</span></button><button class="btn ghost" data-done>טופל ✓</button></div>`);
       card.querySelector('.urow').addEventListener('click', () => openPanel(it));
       card.querySelector('[data-done]').addEventListener('click', async () => {
         const { error } = await sb.from('rys_mention_done').insert({ update_id: u.id });
@@ -1038,11 +1033,20 @@
       if (open) S.openItem = S.items.find((i) => i.id === open) || null;
       renderContent(); if (S.openItem) renderPanel(); else closePanel();
     }, 800); };
+    // also refresh every 30 seconds while the screen is visible, and right when the app comes back to the front
+    const tick = async () => {
+      if (document.hidden || !S.me || document.querySelector('.pop, input.inline, .panel, textarea:focus, input:focus')) return;
+      const y = (document.getElementById('content') || {}).scrollTop, wy = window.scrollY;
+      await loadAll(); renderContent();
+      const c = document.getElementById('content'); if (c) c.scrollTop = y; window.scrollTo(0, wy);
+    };
+    setInterval(tick, 30000);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) tick(); });
     chan = sb.channel('rys').on('postgres_changes', { event: '*', schema: 'public', table: 'rys_items' }, refresh)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'rys_updates' }, refresh).subscribe();
   }
 
-  const api = { ink, sb, S, C, h, esc, toast, icon, loadAll, statusOptions, fmtWhen, cellText, plain, rerender: () => renderContent() };
+  const api = { ink, sb, S, C, h, esc, toast, icon, loadAll, statusOptions, fmtWhen, cellText, plain, authorName, rerender: () => renderContent() };
 
   sb.auth.onAuthStateChange((_e, session) => { setTimeout(() => start(session), 0); });
   sb.auth.getSession().then(({ data }) => start(data.session));
