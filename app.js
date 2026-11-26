@@ -41,6 +41,7 @@
     send: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 12L4 4l3 8-3 8z"/><path d="M7 12h13"/></svg>',
     wa: '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm0 18.2a8.2 8.2 0 0 1-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8s-.4-.1-.6.1-.7.8-.8 1-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4.3-.4.7-1.4.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.7 11.8 11.8 0 0 0 4.5 4c1.7.7 2.3.8 3.2.6.5-.1 1.5-.6 1.7-1.2s.2-1.1.2-1.2-.2-.2-.4-.3z"/></svg>',
     phone: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/></svg>',
+    chart: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>',
     bell: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0"/></svg>',
     sort: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M7 4v16M3 16l4 4 4-4M17 20V4M13 8l4-4 4 4"/></svg>',
     filter: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M3 5h18l-7 8v6l-4-2v-4z"/></svg>',
@@ -209,6 +210,7 @@
         <button class="navbtn" data-view="table" aria-label="טבלה">${icon.board}</button>
         <button class="navbtn" data-view="kanban" aria-label="קנבן">${icon.kanban}</button>
         <button class="navbtn" data-view="urgent" aria-label="מה דחוף">${icon.bell}<span class="badge" data-badge hidden></span></button>
+        <button class="navbtn" data-view="profit" aria-label="רווח">${icon.chart}</button>
         <button class="navbtn bottom" data-view="admin" aria-label="ניהול והגדרות">${icon.gear}</button>
         <button class="navbtn" data-act="logout" aria-label="התנתקות">${icon.logout}</button>
       </nav>
@@ -219,6 +221,7 @@
             <button class="tab" role="tab" data-view="table">טבלה ראשית</button>
             <button class="tab" role="tab" data-view="kanban">קנבן</button>
             <button class="tab" role="tab" data-view="urgent">מה דחוף <span class="badge" data-badge hidden></span></button>
+            <button class="tab" role="tab" data-view="profit">רווח</button>
             <button class="tab" role="tab" data-view="admin">ניהול</button>
           </div>
         </div>
@@ -285,7 +288,7 @@
   function renderFbar() {
     const el = document.getElementById('fbar'); if (!el) return;
     el.innerHTML = '';
-    if (S.view === 'admin' || S.view === 'urgent') return;
+    if (['admin', 'urgent', 'profit'].includes(S.view)) return;
     const chips = [];
     if (S.sort) { const c = S.sort.col === 'name' ? { title: S.nameTitle } : colOf(S.columns, S.sort.col); chips.push({ t: `מיון: ${c ? c.title : ''} ${S.sort.dir > 0 ? '↑' : '↓'}`, x: () => { S.sort = null; } }); }
     for (const [cid, f] of Object.entries(S.filters)) {
@@ -345,10 +348,11 @@
     renderStats(); renderFbar(); renderBadge();
     const el = document.getElementById('content');
     el.innerHTML = '';
-    document.getElementById('stats').style.display = S.view === 'admin' || S.view === 'urgent' ? 'none' : '';
-    document.querySelector('.toolbar').style.display = S.view === 'admin' || S.view === 'urgent' ? 'none' : '';
+    document.getElementById('stats').style.display = ['admin', 'urgent', 'profit'].includes(S.view) ? 'none' : '';
+    document.querySelector('.toolbar').style.display = ['admin', 'urgent', 'profit'].includes(S.view) ? 'none' : '';
     if (S.view === 'admin') window.RYS_ADMIN.render(el, api);
     else if (S.view === 'urgent') el.appendChild(renderUrgent());
+    else if (S.view === 'profit') el.appendChild(renderProfit());
     else if (S.view === 'kanban') el.appendChild(renderKanban()); else { el.appendChild(renderTable()); el.appendChild(renderCards()); }
   }
 
@@ -801,6 +805,38 @@
   }
 
 
+
+  /* ---------- gross profit ---------- */
+  function renderProfit() {
+    const PROFIT = 'numeric_mkzbwczt', DATE = 'date4', SRC = 'color_mkza49qs', CANCELED = 'group_mm1qdp4y';
+    const srcCol = colOf(S.columns, SRC) || (S.allColumns || []).find((c) => c.id === SRC);
+    const rows = S.items.filter((i) => i.group_id !== CANCELED && i.vals[PROFIT] !== undefined && i.vals[PROFIT] !== '' && !isNaN(Number(i.vals[PROFIT])))
+      .map((i) => ({ it: i, p: Number(i.vals[PROFIT]), m: String(i.vals[DATE] || '').slice(0, 7), src: srcCol ? statusInfo(srcCol, i.vals[SRC]).text || 'לא ידוע' : 'לא ידוע' }));
+    const nis = (n) => '₪' + Math.round(n).toLocaleString('he-IL');
+    const sum = (a) => a.reduce((t, r) => t + r.p, 0);
+    const now = new Date(); const ym = (d) => d.toISOString().slice(0, 7);
+    const thisM = ym(now), lastM = ym(new Date(now.getFullYear(), now.getMonth() - 1, 15)), year = String(now.getFullYear());
+    const wrap = h('<div class="profit"></div>');
+    const tiles = [['החודש', rows.filter((r) => r.m === thisM)], ['חודש שעבר', rows.filter((r) => r.m === lastM)], [`שנת ${year}`, rows.filter((r) => r.m.startsWith(year))], ['מההתחלה', rows]];
+    wrap.appendChild(h(`<div class="ptiles">${tiles.map(([t, a]) => `<div class="ptile"><span>${t}</span><b>${nis(sum(a))}</b><small>${a.length} עסקאות</small></div>`).join('')}</div>`));
+    // by month: last 12 months
+    const months = []; for (let k = 11; k >= 0; k--) months.push(ym(new Date(now.getFullYear(), now.getMonth() - k, 15)));
+    const byM = months.map((m) => ({ m, a: rows.filter((r) => r.m === m) })).map((x) => ({ ...x, v: sum(x.a) }));
+    const max = Math.max(1, ...byM.map((x) => x.v));
+    const mname = (m) => new Date(m + '-15').toLocaleDateString('he-IL', { month: 'short' });
+    const chart = h(`<section class="pcard"><h2>רווח גולמי לפי חודש</h2><div class="bars" role="img" aria-label="רווח גולמי ב-12 החודשים האחרונים">${byM.map((x) => `<div class="bcol" tabindex="0" title="${esc(mname(x.m))} ${x.m.slice(0, 4)}: ${nis(x.v)} · ${x.a.length} עסקאות"><span class="bv">${x.v ? Math.round(x.v / 1000) + 'K' : ''}</span><span class="bar" style="height:${(x.v / max) * 100}%"></span><span class="bl">${esc(mname(x.m))}</span></div>`).join('')}</div></section>`);
+    wrap.appendChild(chart);
+    // table view of the same numbers
+    const tbl = h(`<details class="pdet"><summary>הצג כטבלה</summary><table class="ptable"><thead><tr><th>חודש</th><th>עסקאות</th><th>רווח גולמי</th></tr></thead><tbody>${byM.slice().reverse().map((x) => `<tr><td>${esc(mname(x.m))} ${x.m.slice(0, 4)}</td><td>${x.a.length}</td><td>${nis(x.v)}</td></tr>`).join('')}</tbody></table></details>`);
+    chart.appendChild(tbl);
+    // by lead source
+    const srcs = {}; rows.forEach((r) => { (srcs[r.src] = srcs[r.src] || []).push(r); });
+    const list = Object.entries(srcs).map(([k, a]) => ({ k, n: a.length, v: sum(a) })).sort((a, b) => b.v - a.v);
+    const smax = Math.max(1, ...list.map((x) => x.v));
+    wrap.appendChild(h(`<section class="pcard"><h2>רווח גולמי לפי מקור ליד</h2><table class="ptable src"><thead><tr><th>מקור</th><th>עסקאות</th><th>ממוצע</th><th>סה״כ</th></tr></thead><tbody>${list.map((x) => `<tr><td>${esc(x.k)}</td><td>${x.n}</td><td>${nis(x.v / x.n)}</td><td><span class="hbar"><span style="width:${(x.v / smax) * 100}%"></span></span>${nis(x.v)}</td></tr>`).join('')}</tbody></table></section>`));
+    wrap.appendChild(h(`<p class="usub">לפי "רווח גולמי כולל מע״מ" ו"תאריך רכישה". בלי לקוחות שבוטלו.</p>`));
+    return wrap;
+  }
 
   /* ---------- what's urgent ---------- */
   function myMentions() {

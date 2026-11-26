@@ -268,3 +268,35 @@ button.chip{border:0;min-height:32px;font-weight:500}
 @media (max-width:760px){
   .fab{left:16px;bottom:calc(80px + env(safe-area-inset-bottom));min-height:52px;padding:0 16px}
 }
+/* gross profit */
+.profit{max-width:980px;padding-top:18px;display:flex;flex-direction:column;gap:18px}
+.ptiles{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.ptile{background:#fff;border-radius:var(--radius);padding:14px 16px;display:flex;flex-direction:column;gap:2px;box-shadow:0 1px 0 var(--line)}
+.ptile span{font-size:13px;color:var(--muted)}
+.ptile b{font-size:24px;direction:ltr;text-align:right}
+.ptile small{font-size:13px;color:var(--muted)}
+.pcard{background:#fff;border-radius:var(--radius);padding:18px;box-shadow:0 1px 0 var(--line)}
+.pcard h2{margin:0 0 14px;font-size:17px}
+.bars{display:flex;align-items:flex-end;gap:6px;height:220px;padding-top:18px;border-bottom:1px solid var(--line)}
+.bcol{flex:1;height:100%;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;position:relative;outline-offset:2px;border-radius:4px}
+.bcol:hover{background:var(--hover)}
+.bcol .bar{width:min(36px,70%);background:var(--primary);border-radius:4px 4px 0 0;min-height:0}
+.bcol .bv{font-size:12px;color:var(--muted);margin-bottom:4px;direction:ltr}
+.bcol .bl{position:absolute;bottom:-22px;font-size:12px;color:var(--muted);white-space:nowrap}
+.pdet{margin-top:34px;font-size:14px}
+.pdet summary{color:var(--primary);cursor:pointer;min-height:32px}
+.ptable{width:100%;border-collapse:collapse;font-size:14px}
+.ptable th{text-align:right;font-weight:500;color:var(--muted);font-size:13px;padding:6px 8px;border-bottom:1px solid var(--line)}
+.ptable td{padding:8px;border-bottom:1px solid var(--line2)}
+.ptable td:not(:first-child){direction:ltr;text-align:right;white-space:nowrap}
+.ptable.src td:last-child .hbar{margin-right:10px;vertical-align:middle}
+.hbar{display:inline-block;width:120px;height:8px;background:var(--line2);border-radius:4px;overflow:hidden;direction:rtl}
+.hbar span{display:block;height:100%;background:var(--primary);border-radius:4px}
+@media (max-width:760px){
+  .ptiles{grid-template-columns:1fr 1fr}
+  .ptile b{font-size:20px}
+  .bars{gap:3px;height:180px}
+  .bcol .bv{font-size:10px}
+  .bcol .bl{font-size:10px}
+  .hbar{width:60px}
+}
