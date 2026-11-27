@@ -47,8 +47,8 @@
     </div>
     <label>מייל<input name="email_mkzappb7" type="email" autocomplete="email" dir="ltr"></label>
     <div class="row">
-      <label>עיר<input name="text_mkzataf7" autocomplete="address-level2"></label>
-      <label>כתובת מלאה<input name="text_mkzaysa6" autocomplete="street-address"></label>
+      <label>עיר (בעברית)<input name="text_mkzataf7" autocomplete="address-level2" lang="he"></label>
+      <label>כתובת מלאה (בעברית)<input name="text_mkzaysa6" autocomplete="street-address" lang="he"></label>
     </div>
     <label><span data-t="color_mkzacdbj">סוג חבילה</span><select name="color_mkzacdbj"><option value="">בחירה</option></select></label>
     <label><span>צבע מועדף</span><select name="color_mkzbscf7"><option value="">בחירה</option></select><small class="hint">איננו מתחייבים לצבע, אבל נעשה את מירב המאמצים.</small></label>
@@ -64,6 +64,16 @@
   const C = window.RYS_CONFIG;
   const rpc = (fn, body) => fetch(`${C.supabaseUrl}/rest/v1/rpc/${fn}`, { method: 'POST', headers: { apikey: C.supabaseKey, 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
   const HIDE = { color_mkzbejpk: ['3'] }; // no pickup from Herzliya
+  // colour keys allowed per package key (color_mkzacdbj -> color_mkzbscf7); 'אחר' / none = all
+  const P17PRO = ['0', '1', '2'], P17 = ['3', '4', '6', '7'], P18PRO = ['8', '9', '10', '2'];
+  const COLORS = { 0: P17PRO, 1: P17PRO, 2: P17PRO, 3: P17PRO, 4: P17, 110: P17, 6: P18PRO, 7: P18PRO, 8: P18PRO, 9: P18PRO };
+  let colorOpts = [];
+  const fillColors = () => {
+    const sel = f.elements.color_mkzbscf7, keep = sel.value, ok = COLORS[f.elements.color_mkzacdbj.value];
+    sel.length = 1;
+    colorOpts.filter(([k]) => !ok || ok.includes(k)).forEach(([k, v]) => { const op = document.createElement('option'); op.value = k; op.textContent = v.replace(/\s*\(.*\)\s*$/, ''); sel.appendChild(op); });
+    sel.value = [...sel.options].some((o) => o.value === keep) ? keep : '';
+  };
   const model = (t) => t.trim() === 'אחר' ? 'Other' : t.replace(/iphone/ig, 'iPhone').replace(/airpods\s*/ig, 'AirPods ').replace(/Pro(\d)/g, 'Pro $1')
     .replace(/\s*\+\s*/g, ' + ').replace(/^(\d\d) /, 'iPhone $1 ').replace(/\s+/g, ' ').trim();
   const f = document.getElementById('f'), err = document.getElementById('err'), btn = document.getElementById('send');
@@ -73,9 +83,12 @@
       const t = document.querySelector(`[data-t="${id}"]`); if (t && c.title) t.textContent = c.title;
       let opts = Object.entries(c.labels || {}).filter(([k, v]) => v && !(HIDE[id] || []).includes(k)).map(([k, v]) => [k, id === 'color_mkzacdbj' ? model(v) : v]);
       if (id === 'color_mkzacdbj') opts.sort((a, b) => (a[1] === 'Other') - (b[1] === 'Other') || a[1].localeCompare(b[1], 'en', { numeric: true }));
+      if (id === 'color_mkzbscf7') { colorOpts = opts; return; }
       opts.forEach(([k, v]) => { const op = document.createElement('option'); op.value = k; op.textContent = /[a-z]/i.test(v) ? '\u2066' + v + '\u2069' : v; sel.appendChild(op); });
     });
+    fillColors();
   }).catch(() => {});
+  f.elements.color_mkzacdbj.addEventListener('change', fillColors);
   f.addEventListener('submit', async (e) => {
     e.preventDefault(); err.textContent = '';
     const v = Object.fromEntries(new FormData(f).entries());
@@ -84,6 +97,7 @@
     if ((v.name || '').trim().length < 2) { err.textContent = 'נא למלא שם מלא'; f.elements.name.focus(); return; }
     if (!/^(05\d{8}|9725\d{8})$/.test(phone)) { err.textContent = 'נא למלא מספר נייד תקין'; f.elements.phone.focus(); return; }
     if (!/^\d{5,9}$/.test(tz)) { err.textContent = 'נא למלא ת״ז תקינה'; f.elements.tz.focus(); return; }
+    if (/[a-z]/i.test((v.text_mkzataf7 || '') + (v.text_mkzaysa6 || ''))) { err.textContent = 'נא לכתוב את העיר והכתובת בעברית'; f.elements[/[a-z]/i.test(v.text_mkzataf7 || '') ? 'text_mkzataf7' : 'text_mkzaysa6'].focus(); return; }
     btn.disabled = true; btn.textContent = 'שולח...';
     try {
       const r = await rpc('rys_submit_form', { p: v });
