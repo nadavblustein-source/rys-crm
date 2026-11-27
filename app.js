@@ -497,7 +497,7 @@
   }
   function peoplePicker(anchor, ids, onPick) {
     const el = h('<div class="pop" role="dialog" aria-label="בחירת אנשים"></div>');
-    Object.values(S.people).sort((a, b) => a.name.localeCompare(b.name, 'he')).forEach((p) => {
+    Object.values(S.people).filter((p) => memberOf(p.id) || ids.includes(p.id)).sort((a, b) => a.name.localeCompare(b.name, 'he')).forEach((p) => {
       const on = ids.includes(p.id);
       const b = h(`<button class="opt" aria-pressed="${on}"><span class="avatar">${p.photo ? `<img alt="" src="${esc(p.photo)}">` : esc(initials(p.name))}</span>${esc(p.name)}${on ? ' ✓' : ''}</button>`);
       b.addEventListener('click', () => { closePop(); onPick(on ? ids.filter((x) => x !== p.id) : ids.concat(p.id)); });
