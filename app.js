@@ -131,6 +131,8 @@
     S.items.forEach((i) => { const lu = S.lastUpd[i.id]; S.lastAct[i.id] = lu && lu.created_at > i.updated_at ? lu.created_at : i.updated_at; });
     S.mentionDone = new Set(((md && md.data) || []).map((r) => String(r.update_id)));
     S.allUpdates = up;
+    S.me = S.members.find((m) => m.user_id === S.user.id);
+    if (S.me) ensurePayRows();
   }
   async function fetchAll(table, cols, mod) {
     const out = []; let from = 0; const step = 1000;
@@ -571,8 +573,23 @@
     const pos = Math.min(0, ...S.items.filter((i) => i.group_id === groupId).map((i) => i.position)) - 1;
     const { data, error } = await sb.from('rys_items').insert({ board_id: C.boardId, group_id: groupId, name, position: pos, creator_id: S.me.person_id }).select().single();
     if (error) return toast('ההוספה נכשלה: ' + error.message);
-    S.items.unshift(data); renderContent();
+    S.items.unshift(data); await addPayRows([data]); renderContent();
     if (open) openPanel(data, 'details');
+  }
+  // every new customer gets the two payment rows, like in Monday
+  const PAY_ROWS = ['תשלום בש״ח לנדב בלושטיין', 'תשלום בש״ח לטרקטור הירוק'], PAY_SINCE = '2026-11-26';
+  async function addPayRows(items) {
+    for (const it of items) {
+      const { count } = await sb.from('rys_items').select('id', { count: 'exact', head: true }).eq('parent_item_id', it.id);
+      if (count) continue;
+      const { data } = await sb.from('rys_items').insert(PAY_ROWS.map((name, i) => ({ board_id: C.subBoardId, group_id: (S.subGroups[0] || {}).id || 'topics', parent_item_id: it.id, name, position: i, vals: {}, creator_id: S.me.person_id }))).select();
+      if (data) S.subitems.push(...data);
+    }
+  }
+  function ensurePayRows() {
+    const has = new Set(S.subitems.map((x) => x.parent_item_id));
+    const need = S.items.filter((i) => i.created_at >= PAY_SINCE && !has.has(i.id));
+    if (need.length) addPayRows(need).catch(() => {});
   }
   async function deleteItem(it) {
     if (!confirm(`למחוק את "${it.name}"? הלקוח יעבור לארכיון ואפשר יהיה לשחזר אותו.`)) return;
