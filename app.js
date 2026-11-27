@@ -691,7 +691,7 @@
 
   function renderSubs(body, it) {
     const subs = S.subitems.filter((s) => s.parent_item_id === it.id).sort((a, b) => a.position - b.position);
-    const tpl = gridCols(S.subColumns, 200);
+    const tpl = gridCols(S.subColumns, 290);
     const cols = S.subColumns;
     const box = h('<div class="subtbl"></div>');
     const head = h(`<div class="row head" style="grid-template-columns:${tpl}"><div class="cell name">פריט</div></div>`);
