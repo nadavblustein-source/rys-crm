@@ -19,8 +19,8 @@
   form{background:#fff;border-radius:18px;padding:22px 18px;display:flex;flex-direction:column;gap:16px;box-shadow:0 6px 24px rgba(20,24,40,.06)}
   label{display:flex;flex-direction:column;gap:6px;font-size:14px;color:var(--muted)}
   label b{color:var(--danger);font-weight:500}
-  input,select{font:inherit;color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:11px 12px;min-height:48px;background:#fff;width:100%}
-  input:focus,select:focus{outline:3px solid #8bb8f0;outline-offset:0;border-color:var(--primary)}
+  input,select,textarea{font:inherit;color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:11px 12px;min-height:48px;background:#fff;width:100%}
+  input:focus,select:focus,textarea:focus{outline:3px solid #8bb8f0;outline-offset:0;border-color:var(--primary)}
   input[dir=ltr]{text-align:right}
   .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
   button{font:inherit;border:0;border-radius:12px;min-height:52px;background:var(--primary);color:#fff;font-weight:500;font-size:17px;cursor:pointer;margin-top:4px}
@@ -53,6 +53,7 @@
     <label><span data-t="color_mkzacdbj">סוג חבילה</span><select name="color_mkzacdbj"><option value="">בחירה</option></select></label>
     <label><span>צבע מועדף</span><select name="color_mkzbscf7"><option value="">בחירה</option></select><small class="hint">איננו מתחייבים לצבע, אבל נעשה את מירב המאמצים.</small></label>
     <label><span data-t="color_mkzbejpk">אופן אספקה</span><select name="color_mkzbejpk"><option value="">בחירה</option></select></label>
+    <label>הערות<textarea name="long_textycnewz3l" rows="3" maxlength="2000" style="resize:vertical"></textarea></label>
     <label class="hp" aria-hidden="true">אתר<input name="website" tabindex="-1" autocomplete="off"></label>
     <p class="err" id="err" role="alert"></p>
     <button id="send">שליחה</button>
