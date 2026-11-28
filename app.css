@@ -305,3 +305,11 @@ button.chip{border:0;min-height:32px;font-weight:500}
 .acard s{color:var(--muted)}
 .acard .arow{display:flex;gap:8px;margin-top:10px}
 .acard .astate{margin:8px 0 0;color:var(--muted);font-size:14px}
+button.logo{border:0;cursor:pointer;font-family:inherit}
+.top h1 .home{all:unset;cursor:pointer}
+.top h1 .home:focus-visible{outline:3px solid #8bb8f0;border-radius:6px}
+.changes .lead{color:var(--muted);margin:0 0 10px}
+.changes .log li{align-items:center}
+.changes .log a{color:var(--primary);text-decoration:none;font-weight:500}
+.changes .undo{min-height:32px;padding:2px 10px;font-size:13px}
+.changes .fchips{display:flex;gap:8px;flex-wrap:wrap}.changes .fchip.on{background:var(--primary);color:#fff}

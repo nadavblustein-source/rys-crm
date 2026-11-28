@@ -27,6 +27,7 @@
     clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), undo ? 6000 : 2600);
   };
   const icon = {
+    history: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/></svg>',
     board: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 10v10"/></svg>',
     kanban: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="5" height="16" rx="1"/><rect x="10" y="4" width="5" height="10" rx="1"/><rect x="17" y="4" width="4" height="13" rx="1"/></svg>',
     search: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#62636f" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>',
@@ -209,22 +210,24 @@
     $app.innerHTML = '';
     const shell = h(`<div class="shell">
       <nav class="nav" aria-label="תפריט ראשי">
-        <div class="logo">RYS</div>
+        <button class="logo" data-home aria-label="מסך הבית">RYS</button>
         <button class="navbtn" data-view="table" aria-label="טבלה">${icon.board}</button>
         <button class="navbtn" data-view="kanban" aria-label="קנבן">${icon.kanban}</button>
         <button class="navbtn" data-view="urgent" aria-label="מה דחוף">${icon.bell}<span class="badge" data-badge hidden></span></button>
         <button class="navbtn" data-view="profit" aria-label="רווח">${icon.chart}</button>
+        <button class="navbtn" data-view="log" aria-label="שינויים">${icon.history}</button>
         <button class="navbtn bottom" data-view="admin" aria-label="ניהול והגדרות">${icon.gear}</button>
         <button class="navbtn" data-act="logout" aria-label="התנתקות">${icon.logout}</button>
       </nav>
       <div class="main">
         <div class="top">
-          <h1>Restart your soul <small id="total"></small></h1>
+          <h1><button class="home" data-home>Restart your soul</button> <small id="total"></small></h1>
           <div class="tabs" role="tablist">
             <button class="tab" role="tab" data-view="table">טבלה ראשית</button>
             <button class="tab" role="tab" data-view="kanban">קנבן</button>
             <button class="tab" role="tab" data-view="urgent">מה דחוף <span class="badge" data-badge hidden></span></button>
             <button class="tab" role="tab" data-view="profit">רווח</button>
+            <button class="tab" role="tab" data-view="log">שינויים</button>
             <button class="tab" role="tab" data-view="admin">ניהול</button>
           </div>
         </div>
@@ -235,11 +238,12 @@
         </div>
         <div class="fbar" id="fbar"></div>
         <div class="content" id="content"></div>
-        <button class="fab" data-act="ask" aria-label="שאל את המערכת" title="שאל את המערכת">${icon.spark}<span>שאל</span></button>
+        <button class="fab" data-act="ask" aria-label="אלוהים" title="אלוהים">${icon.spark}<span>אלוהים</span></button>
       </div>
     </div>`);
     $app.appendChild(shell);
     shell.querySelectorAll('[data-view]').forEach((b) => b.addEventListener('click', () => { S.view = b.dataset.view; renderContent(); window.scrollTo(0, 0); document.getElementById('content').scrollTop = 0; }));
+    shell.querySelectorAll('[data-home]').forEach((b) => b.addEventListener('click', () => { S.view = 'table'; S.search = ''; const q0 = shell.querySelector('#q'); if (q0) q0.value = ''; closePanel(); renderContent(); window.scrollTo(0, 0); document.getElementById('content').scrollTop = 0; }));
     shell.querySelector('[data-act=logout]').addEventListener('click', async () => { await sb.auth.signOut(); location.reload(); });
     shell.querySelector('[data-act=new]').addEventListener('click', () => newItem(S.groups[0].id, 'לקוח חדש', true));
     shell.querySelectorAll('[data-act=ask]').forEach((b) => b.addEventListener('click', openAsk));
@@ -356,6 +360,7 @@
     if (S.view === 'admin') window.RYS_ADMIN.render(el, api);
     else if (S.view === 'urgent') el.appendChild(renderUrgent());
     else if (S.view === 'profit') el.appendChild(renderProfit());
+    else if (S.view === 'log') el.appendChild(renderChanges());
     else if (S.view === 'kanban') el.appendChild(renderKanban()); else { el.appendChild(renderTable()); el.appendChild(renderCards()); }
   }
 
@@ -807,22 +812,99 @@
     if (error) return body.appendChild(h('<div class="empty-state">שגיאה</div>'));
     if (!data.length) return body.appendChild(h('<div class="empty-state">כאן יופיעו כל השינויים שייעשו מעכשיו במערכת החדשה</div>'));
     const ul = h('<ul class="log"></ul>');
-    data.forEach((a) => {
-      const col = colOf(S.columns, a.field) || colOf(S.subColumns, a.field);
-      const label = a.field === 'name' ? 'שם' : a.field === 'group' ? 'קבוצה' : col ? col.title : a.field;
-      const show = (raw) => {
-        if (raw == null || raw === '') return '—';
-        if (a.field === 'group') return (S.groups.find((g) => g.id === raw) || {}).title || raw;
-        if (!col) return raw;
-        let v = raw; try { v = JSON.parse(raw); } catch (e) {}
-        return cellText(col, v) || '—';
-      };
-      ul.appendChild(h(`<li><b>${esc(a.user_name || 'מערכת')}</b><span>${esc(label)}: ${esc(show(a.old_val))} ← ${esc(show(a.new_val))}</span><span class="when">${esc(fmtWhen(a.created_at))}</span></li>`));
-    });
+    data.forEach((a) => ul.appendChild(h(`<li><b>${esc(a.user_name || 'מערכת')}</b><span>${esc(actText(a))}</span><span class="when">${esc(fmtWhen(a.created_at))}</span></li>`)));
     body.appendChild(ul);
   }
 
 
+
+  // one activity row in plain Hebrew
+  const ALL_COLS = () => S.allColumns || S.columns.concat(S.subColumns);
+  function actText(a) {
+    if (a.field === 'נוצר') return `נוצר: ${a.new_val || ''}`;
+    if (a.field === 'archived') return a.new_val === 'true' ? 'נמחק (בארכיון)' : 'שוחזר מהארכיון';
+    if (!a.item_id) {
+      if (/^אפשרויות בעמודה/.test(a.field)) { let o = {}, n = {}; try { o = JSON.parse(a.old_val || '{}'); n = JSON.parse(a.new_val || '{}'); } catch (e) {} const add = Object.keys(n).filter((k) => n[k] && !o[k]).map((k) => n[k]), ren = Object.keys(n).filter((k) => o[k] && n[k] && o[k] !== n[k]).map((k) => `${o[k]} ← ${n[k]}`), del = Object.keys(o).filter((k) => o[k] && !n[k]).map((k) => o[k]); return `${a.field}: ${[add.length ? 'נוספו ' + add.join(', ') : '', ren.length ? 'שונו ' + ren.join(', ') : '', del.length ? 'הוסרו ' + del.join(', ') : ''].filter(Boolean).join(' · ') || 'עודכנו'}`; }
+      return a.old_val && a.new_val ? `${a.field}: ${a.old_val} ← ${a.new_val}` : `${a.field}: ${a.new_val || a.old_val || ''}`;
+    }
+    const col = ALL_COLS().find((c) => c.id === a.field);
+    const label = a.field === 'name' ? 'שם' : a.field === 'group' ? 'קבוצה' : col ? col.title : a.field;
+    const show = (raw) => {
+      if (raw == null || raw === '') return '—';
+      if (a.field === 'group') return (S.groups.find((g) => g.id === raw) || {}).title || raw;
+      if (!col) return raw;
+      let v = raw; try { v = JSON.parse(raw); } catch (e) {}
+      return cellText(col, v) || '—';
+    };
+    return `${label}: ${show(a.old_val)} ← ${show(a.new_val)}`;
+  }
+  // put one logged change back; only when the value is still what that change set
+  async function undoAct(a) {
+    const { data: row } = await sb.from('rys_items').select('*').eq('id', a.item_id).single();
+    if (!row) return toast('לא נמצא');
+    const col = ALL_COLS().find((c) => c.id === a.field);
+    const parse = (raw) => { if (raw == null) return null; if (col && col.type === 'checkbox') return raw === 'true' ? true : null; if (col && ['status', 'people', 'date'].includes(col.type)) { try { return JSON.parse(raw); } catch (e) { return raw; } } return raw; };
+    let patch;
+    if (a.field === 'archived') patch = { archived: a.old_val === 'true' };
+    else if (a.field === 'name') patch = { name: a.old_val };
+    else if (a.field === 'group') patch = { group_id: a.old_val };
+    else { const vals = Object.assign({}, row.vals); const v = parse(a.old_val); if (v == null) delete vals[a.field]; else vals[a.field] = v; patch = { vals }; }
+    const { error } = await sb.from('rys_items').update(patch).eq('id', a.item_id);
+    if (error) return toast('הביטול נכשל: ' + error.message);
+    toast('השינוי בוטל'); await reload(); renderContent();
+  }
+  function curRaw(row, a) {
+    if (!row) return undefined;
+    if (a.field === 'archived') return String(!!row.archived);
+    if (a.field === 'name') return row.name; if (a.field === 'group') return row.group_id;
+    const v = row.vals ? row.vals[a.field] : undefined; return v == null ? null : typeof v === 'object' ? JSON.stringify(v) : String(v);
+  }
+  const sameRaw = (x, y) => { if (x == null || y == null) return x == y; try { return JSON.stringify(JSON.parse(x)) === JSON.stringify(JSON.parse(y)); } catch (e) { return x === y; } };
+
+  /* ---------- change log ---------- */
+  function renderChanges() {
+    const wrap = h('<div class="urgent changes"><p class="lead">כל השינויים במערכת, מהחדש לישן. אפשר לבטל שינוי בשדה, בשם, בקבוצה או במחיקה.</p><div class="fchips" role="group" aria-label="סינון לפי משתמש"></div><div class="lbody"><div class="empty-state">טוען...</div></div></div>');
+    const who = S.logWho || '';
+    const chips = wrap.querySelector('.fchips');
+    [['', 'כולם']].concat(S.members.map((m) => [m.name, m.name])).forEach(([v, t]) => { const b = h(`<button class="fchip${v === who ? ' on' : ''}" aria-pressed="${v === who}">${esc(t)}</button>`); b.addEventListener('click', () => { S.logWho = v; renderContent(); }); chips.appendChild(b); });
+    (async () => {
+      let q = sb.from('rys_activity').select('*').order('created_at', { ascending: false }).limit(300);
+      if (who) q = q.eq('user_name', who);
+      const [{ data, error }, { data: cols }] = await Promise.all([q, sb.from('rys_columns').select('board_id,id,title,type,settings')]);
+      const body = wrap.querySelector('.lbody'); body.innerHTML = '';
+      if (error) return body.appendChild(h('<div class="empty-state">שגיאה בטעינה</div>'));
+      S.allColumns = cols || null;
+      const ups = (S.allUpdates || []).filter((u) => !who || authorName(u) === who).slice().sort((x, y) => (y.created_at > x.created_at ? 1 : -1)).slice(0, 100)
+        .map((u) => ({ upd: true, item_id: u.item_id, user_name: authorName(u), created_at: u.created_at, text: (u.parent_id ? 'תגובה: ' : 'עדכון: ') + plain(u.body).slice(0, 160) }));
+      const rows = data.concat(ups).sort((x, y) => (y.created_at > x.created_at ? 1 : -1)).slice(0, 300);
+      const ids = [...new Set(rows.map((r) => r.item_id).filter(Boolean))];
+      const known = {}; S.items.concat(S.subitems).forEach((i) => { known[i.id] = i; });
+      const miss = ids.filter((id) => !known[id]);
+      for (let i = 0; i < miss.length; i += 100) { const { data: more } = await sb.from('rys_items').select('*').in('id', miss.slice(i, i + 100)); (more || []).forEach((r) => { known[r.id] = r; }); }
+      if (!rows.length) return body.appendChild(h('<div class="empty-state">אין שינויים</div>'));
+      const ul = h('<ul class="log"></ul>');
+      const seen = new Set();
+      rows.forEach((a) => {
+        const it = a.item_id ? known[a.item_id] : null, parent = it && it.parent_item_id ? known[it.parent_item_id] : null;
+        const cust = parent || it;
+        const where = it ? (parent ? `${parent.name} · ${it.name}` : it.name) : '';
+        const li = h(`<li><b>${esc(a.user_name || 'מערכת')}</b><span>${where ? `<a href="#" data-open>${esc(where)}</a> · ` : ''}${esc(a.upd ? a.text : actText(a))}</span><span class="when">${esc(fmtWhen(a.created_at))}</span></li>`);
+        const o = li.querySelector('[data-open]');
+        if (o) o.addEventListener('click', (e) => { e.preventDefault(); const c = S.items.find((x) => cust && x.id === cust.id); if (c) openPanel(c, 'log'); else toast('הלקוח בארכיון'); });
+        // undo only the newest change of each field, and only while it is still in place
+        const key = a.item_id + '|' + a.field;
+        if (!a.upd && a.item_id && a.field !== 'נוצר' && !seen.has(key) && it && sameRaw(curRaw(it, a), a.new_val == null ? null : a.new_val)) {
+          const b = h('<button class="btn text undo">ביטול</button>');
+          b.addEventListener('click', async () => { if (b.dataset.sure !== '1') { b.dataset.sure = '1'; b.textContent = 'לבטל?'; return; } b.disabled = true; await undoAct(a); });
+          li.appendChild(b);
+        }
+        seen.add(key);
+        ul.appendChild(li);
+      });
+      body.appendChild(ul);
+    })();
+    return wrap;
+  }
 
   /* ---------- gross profit ---------- */
   function renderProfit() {
@@ -964,8 +1046,8 @@
     let d = document.getElementById('ask');
     if (d) { d.querySelector('textarea').focus(); return; }
     const scrim = h('<div class="scrim" id="askscrim"></div>'); scrim.addEventListener('click', closeAsk); document.body.appendChild(scrim);
-    d = h(`<div class="panel ask" id="ask" role="dialog" aria-modal="true" aria-label="שאל את המערכת">
-      <header><div class="ptitle"><button class="iconbtn" data-act="close" aria-label="סגירה">${icon.close}</button><h2 style="flex:1;margin:0;font-size:20px;display:flex;align-items:center;gap:8px">${icon.spark} שאל את המערכת</h2><button class="btn text" data-act="clear">שיחה חדשה</button></div></header>
+    d = h(`<div class="panel ask" id="ask" role="dialog" aria-modal="true" aria-label="אלוהים">
+      <header><div class="ptitle"><button class="iconbtn" data-act="close" aria-label="סגירה">${icon.close}</button><h2 style="flex:1;margin:0;font-size:20px;display:flex;align-items:center;gap:8px">${icon.spark} אלוהים</h2><button class="btn text" data-act="clear">שיחה חדשה</button></div></header>
       <div class="pbody" id="asklog"></div>
       <form class="askform"><label class="sr" for="askq">השאלה שלך</label><textarea id="askq" rows="2" placeholder="לדוגמה: אילו לקוחות מחכים לזיכוי?"></textarea><button class="btn" aria-label="שליחה">${icon.send}</button></form>
     </div>`);
@@ -988,7 +1070,7 @@
     log.innerHTML = '';
     if (!ASK.turns.length) {
       const sugs = ['אילו לקוחות מחכים לזיכוי?', 'כמה לקוחות יש בכל קבוצה?', 'מה קורה עם הלקוח האחרון שנוסף?', 'למי עוד לא יצאה חשבונית 3?'];
-      log.appendChild(h(`<div class="askhello"><p>אפשר לשאול כל שאלה על הלקוחות, הסטטוסים, התשלומים והעדכונים. אפשר גם לבקש שינוי, למשל "תעביר את דני לבתהליך", והוא יבוצע רק אחרי שתאשר.</p><div class="sugs">${sugs.map((q) => `<button class="btn ghost" data-q="${esc(q)}">${esc(q)}</button>`).join('')}</div></div>`));
+      log.appendChild(h(`<div class="askhello"><p>אפשר לשאול כל שאלה על הלקוחות, התשלומים והעדכונים, וגם לבקש שינויים: להוסיף או למחוק לקוח, לערוך שורות תשלום, לכתוב עדכון, לשנות שמות של קבוצות, עמודות ואפשרויות ולהוסיף חדשות. כל שינוי מתבצע רק אחרי שתאשר, ואפשר לבטל אותו.</p><div class="sugs">${sugs.map((q) => `<button class="btn ghost" data-q="${esc(q)}">${esc(q)}</button>`).join('')}</div></div>`));
     }
     ASK.turns.forEach((t) => {
       if (t.role === 'user') log.appendChild(h(`<div class="msg me">${esc(t.content)}</div>`));
@@ -1016,17 +1098,43 @@
     else ASK.turns.push({ role: 'assistant', content: data.answer, actions: data.actions || [], state: 'pending' });
     renderAsk();
   }
+  // runs the row changes "אלוהים" prepared, as the signed-in user; returns an undo function, or null if nothing ran
+  const ADMIN_TABLES = ['rys_items', 'rys_groups', 'rys_columns', 'rys_updates'];
+  async function runAdmin(ops) {
+    const undo = [];
+    const back = async () => { for (const f of undo.reverse()) await f(); };
+    for (const op of ops) {
+      if (!ADMIN_TABLES.includes(op.table)) { await back(); return null; }
+      const match = (q, m) => { Object.entries(m).forEach(([k, v]) => { q = q.eq(k, v); }); return q; };
+      if (op.t === 'update') {
+        const { data, error } = await match(sb.from(op.table).update(op.set), op.match).select();
+        if (error || !data || !data.length) { toast('השינוי נכשל' + (error ? ': ' + error.message : '')); await back(); return null; }
+        undo.push(() => match(sb.from(op.table).update(op.before), op.match));
+      } else {
+        const row = Object.assign({}, op.row), pay = row._pay; delete row._pay;
+        const { data, error } = await sb.from(op.table).insert(row).select().single();
+        if (error) { toast('ההוספה נכשלה: ' + error.message); await back(); return null; }
+        if (op.table === 'rys_items') undo.push(() => sb.from('rys_items').update({ archived: true }).eq('id', data.id));
+        else if (op.table === 'rys_updates') undo.push(() => sb.from('rys_updates').delete().eq('id', data.id));
+        else undo.push(() => sb.from(op.table).delete().eq('board_id', data.board_id).eq('id', data.id));
+        if (pay) await sb.from('rys_items').insert(pay.map((name, i) => ({ board_id: C.subBoardId, group_id: (S.subGroups[0] || {}).id || 'topics', parent_item_id: data.id, name, position: i, vals: {}, creator_id: S.me.person_id })));
+      }
+    }
+    return back;
+  }
+  async function reload() { const open = S.openItem && S.openItem.id; await loadAll(); if (open) S.openItem = S.items.find((i) => i.id === open) || null; }
   function actionsCard(t) {
-    const c = h(`<div class="acard"><ul>${t.actions.map((a) => `<li><b>${esc(a.name)}</b> · ${esc(a.field)}: ${a.from ? `<s>${esc(a.from)}</s> ← ` : ''}${esc(a.to)}</li>`).join('')}</ul></div>`);
+    const c = h(`<div class="acard"><ul>${t.actions.map((a) => a.kind === 'admin' ? `<li>${esc(a.desc)}</li>` : `<li><b>${esc(a.name)}</b> · ${esc(a.field)}: ${a.from ? `<s>${esc(a.from)}</s> ← ` : ''}${esc(a.to)}</li>`).join('')}</ul></div>`);
     if (t.state === 'done') { c.appendChild(h('<p class="astate">✓ בוצע</p>')); return c; }
     if (t.state === 'cancel') { c.appendChild(h('<p class="astate">בוטל</p>')); return c; }
     const row = h(`<div class="arow"><button class="btn" data-ok>${t.actions.length > 1 ? `אישור ${t.actions.length} שינויים` : 'אישור'}</button><button class="btn ghost" data-no>ביטול</button></div>`);
     row.querySelector('[data-no]').addEventListener('click', () => { t.state = 'cancel'; renderAsk(); });
     row.querySelector('[data-ok]').addEventListener('click', async (e) => {
       e.currentTarget.disabled = true;
-      const befores = []; let fail = 0;
+      const befores = [], undos = []; let fail = 0;
       for (const a of t.actions) {
-        const item = S.items.find((i) => i.id === a.item_id); if (!item) { fail++; continue; }
+        if (a.kind === 'admin') { const u = await runAdmin(a.ops); if (u) undos.push(u); else fail++; continue; }
+        const item = (a.sub ? S.subitems : S.items).find((i) => i.id === a.item_id); if (!item) { fail++; continue; }
         const before = { vals: Object.assign({}, item.vals), group_id: item.group_id, name: item.name };
         const patch = {};
         if (a.patch.group_id) patch.group_id = a.patch.group_id;
@@ -1035,8 +1143,8 @@
         const r = await saveItem(item, patch, true);
         if (r) befores.push([item, before]); else fail++;
       }
-      t.state = 'done'; renderAsk(); renderContent(); if (S.openItem) renderPanel();
-      toast(fail ? `בוצעו ${befores.length}, נכשלו ${fail}` : 'בוצע', async () => { for (const [item, b] of befores) await saveItem(item, b, true); t.state = 'pending'; toast('השינוי בוטל'); renderAsk(); renderContent(); });
+      t.state = 'done'; if (undos.length) await reload(); renderAsk(); renderContent(); if (S.openItem) renderPanel();
+      toast(fail ? `בוצעו ${befores.length + undos.length}, נכשלו ${fail}` : 'בוצע', async () => { for (const [item, b] of befores) await saveItem(item, b, true); for (const u of undos.reverse()) await u(); await reload(); t.state = 'pending'; toast('השינוי בוטל'); renderAsk(); renderContent(); if (S.openItem) renderPanel(); });
     });
     c.appendChild(row);
     return c;

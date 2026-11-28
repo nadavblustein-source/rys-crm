@@ -1,4 +1,4 @@
-// "שאל את המערכת": answers questions about the RYS board with Claude, looking things up as the person asking.
+// "אלוהים": answers questions about the RYS board with Claude, looking things up as the person asking.
 import Anthropic from "npm:@anthropic-ai/sdk@1.3.0";
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.49.4";
 
@@ -71,25 +71,31 @@ async function snapshot(db: SupabaseClient) {
   const line = (it: Item, cs: Col[]) => cs.map((c) => { const t = valText(c, it.vals?.[c.id], ppl); return t ? `${c.title}: ${t}` : ""; }).filter(Boolean).join(" | ");
   const main = items.filter((i) => i.board_id === BOARD);
   const rows = main.map((it) => {
-    const subs = (subsOf[it.id] ?? []).map((s) => `    - ${s.name}${line(s, subCols) ? " | " + line(s, subCols) : ""}`).join("\n");
+    const subs = (subsOf[it.id] ?? []).map((s) => `    - [${s.id}] ${s.name}${line(s, subCols) ? " | " + line(s, subCols) : ""}`).join("\n");
     return `[${it.id}] ${it.name} | קבוצה: ${gname[it.group_id] ?? it.group_id} | ${line(it, mainCols)} | נוצר: ${it.created_at.slice(0, 10)}${subs ? "\n" + subs : ""}`;
   });
   const statusCols = [...mainCols, ...subCols].filter((c) => c.type === "status").map((c) => `- ${c.title}: ${Object.values(c.settings?.labels ?? {}).filter(Boolean).join(" / ")}`);
   const text = `קבוצות בלוח: ${Object.values(gname).join(", ")}
 עמודות הלקוח: ${mainCols.map((c) => c.title).join(", ")}
-שורות תשלום (תתי-פריטים) מופיעות מתחת ללקוח עם "-", עם העמודות: ${subCols.map((c) => c.title).join(", ")}
+עמודות מוסתרות: ${cols.filter((c) => c.board_id === BOARD && c.hidden && !["name", "subtasks", "file"].includes(c.type)).map((c) => c.title).join(", ") || "אין"}
+שורות תשלום (תתי-פריטים) מופיעות מתחת ללקוח עם "- [מספר שורה]", עם העמודות: ${subCols.map((c) => c.title).join(", ")}
 אפשרויות בעמודות הבחירה:
 ${statusCols.join("\n")}
 
 כל הלקוחות (${main.length}), בפורמט [מספר] שם | שדות:
 ${rows.join("\n")}`;
-  return { text, names: Object.fromEntries(items.map((i) => [i.id, i.name])) as Record<number, string>, mainCols, gname, items: Object.fromEntries(main.map((i) => [i.id, i])) as Record<number, Item> };
+  const subItems = Object.fromEntries(items.filter((i) => i.board_id === SUB_BOARD).map((i) => [i.id, i])) as Record<number, Item>;
+  return { text, names: Object.fromEntries(items.map((i) => [i.id, i.name])) as Record<number, string>, mainCols, subCols, cols, groups: groups.filter((g) => g.board_id === BOARD), ppl, gname, items: Object.fromEntries(main.map((i) => [i.id, i])) as Record<number, Item>, subItems, subGroup: groups.find((g) => g.board_id === SUB_BOARD)?.id ?? "topics" };
 }
 
-const SYSTEM = `אתה העוזר של מערכת ה-CRM "Restart your soul" (RYS) של נדב ורון. המערכת מנהלת לקוחות שמקבלים מכשירים (בעיקר אייפון ומחשבים) דרך מימון של קרן סיוע: הגשת חשבוניות (1, 2, 3), אישורים, סירובים, זיכויים, תשלומים ואיסוף/משלוח.
+const SYSTEM = `שמך "אלוהים". אתה העוזר של מערכת ה-CRM "Restart your soul" (RYS) של נדב ורון. המערכת מנהלת לקוחות שמקבלים מכשירים (בעיקר אייפון ומחשבים) דרך מימון של קרן סיוע: הגשת חשבוניות (1, 2, 3), אישורים, סירובים, זיכויים, תשלומים ואיסוף/משלוח.
 אתה עונה לנדב או לרון על כל שאלה על הלקוחות והנתונים במערכת, לפי הנתונים בלבד. אל תנחש מספרים ואל תמציא. אם אין מידע, אמור זאת.
 הנתונים של כל הלקוחות מופיעים למטה. העדכונים וההערות על כל לקוח (השיחות בין נדב לרון) לא מופיעים: כדי לקרוא אותם השתמש בכלי get_updates, וכדי לחפש מילה או נושא בכל העדכונים השתמש ב-search_updates. כשהשאלה היא "מה קורה עם X" או "למה", תמיד קרא את העדכונים שלו.
-כשמבקשים לשנות משהו (להעביר קבוצה, לשנות סטטוס, לעדכן שדה), השתמש בכלי propose_changes. הכלי לא משנה כלום: הוא מציג למשתמש כפתור "אישור", והשינוי קורה רק אחרי שהוא לוחץ. אחרי שהצעת, כתוב במשפט אחד מה יקרה אחרי האישור. אל תכתוב שהשינוי כבר בוצע. אי אפשר למחוק לקוחות, לכתוב עדכונים או לשנות שורות תשלום דרך העוזר; אם מבקשים, הסבר בקצרה איך עושים את זה במסך.
+אתה יכול גם לשנות את המערכת, לבקשת נדב או רון (לשניהם אותן הרשאות):
+- שינוי שדות של לקוח, העברת קבוצה או שינוי שם: הכלי propose_changes.
+- כל השאר בכלי propose_admin: הוספת לקוח, מחיקת לקוח (עובר לארכיון ואפשר לשחזר), הוספה/עריכה/מחיקה של שורות תשלום, כתיבת עדכון על לקוח, הוספה ושינוי שם של קבוצות, שינוי שם/הסתרה/הצגה/הוספה של עמודות, הוספה ושינוי שם של אפשרויות בעמודות בחירה.
+הכלים לא משנים כלום: הם מציגים למשתמש כפתור "אישור", והשינוי קורה רק אחרי שהוא לוחץ. אפשר לבטל אחרי הביצוע. אחרי שהצעת, כתוב במשפט אחד מה יקרה אחרי האישור. אל תכתוב שהשינוי כבר בוצע.
+לפני מחיקה ודא שזה הלקוח או השורה הנכונים, ואם יש ספק שאל קודם. אי אפשר למחוק קבוצות, עמודות או אפשרויות דרכך (אפשר להסתיר עמודה); לשינויים בעיצוב או בקוד של המערכת עצמה, הסבר שצריך לבקש מנדב.
 
 איך לכתוב את התשובה (חשוב: נדב רוצה שהכל יהיה ברור וקל):
 - שורה ראשונה: התשובה עצמה, מודגשת, במשפט אחד.
@@ -107,22 +113,28 @@ const tools: Anthropic.Beta.BetaTool[] = [
   { name: "propose_changes", description: "Propose changes to customers for the user to approve with one tap. Nothing changes until they approve. field is a column title exactly as listed, or 'קבוצה' to move the customer to another group, or 'שם' to rename. For choice columns, value must be one of that column's options exactly; for 'קבוצה', a group title exactly. Use an empty value to clear a field.",
     input_schema: { type: "object", properties: { changes: { type: "array", minItems: 1, maxItems: 50, items: { type: "object", properties: {
       item_id: { type: "integer" }, field: { type: "string" }, value: { type: "string" } }, required: ["item_id", "field", "value"], additionalProperties: false } } }, required: ["changes"], additionalProperties: false } },
+  { name: "propose_admin", description: "Propose other changes for the user to approve with one tap (nothing changes until they approve). Each op uses only the fields it needs: add_customer(name, group?); delete_customer(item_id); add_payment_row(item_id, name); set_payment(row_id, field, value) where field is a payment column title or 'שם'; delete_payment_row(row_id); add_update(item_id, text); add_group(name); rename_group(group, name); add_column(name, column_type); rename_column(column, name); hide_column(column); show_column(column); add_option(column, name); rename_option(column, option, name). Titles must match exactly as listed.",
+    input_schema: { type: "object", properties: { ops: { type: "array", minItems: 1, maxItems: 30, items: { type: "object", properties: {
+      op: { type: "string", enum: ["add_customer", "delete_customer", "add_payment_row", "set_payment", "delete_payment_row", "add_update", "add_group", "rename_group", "add_column", "rename_column", "hide_column", "show_column", "add_option", "rename_option"] },
+      item_id: { type: "integer" }, row_id: { type: "integer" }, name: { type: "string" }, group: { type: "string" }, field: { type: "string" }, value: { type: "string" },
+      text: { type: "string" }, column: { type: "string" }, option: { type: "string" }, column_type: { type: "string", enum: ["text", "numbers", "date", "status", "checkbox", "long_text"] } },
+      required: ["op"], additionalProperties: false } } }, required: ["ops"], additionalProperties: false } },
 ];
 
 type Action = { item_id: number; name: string; field: string; from: string; to: string; patch: { group_id?: string; name?: string; col?: string; val?: any } };
 
-function resolveChange(snap: Awaited<ReturnType<typeof snapshot>>, ch: { item_id: number; field: string; value: string }, ppl: Record<string, string> = {}): Action | string {
-  const it = snap.items[ch.item_id];
-  if (!it) return `[${ch.item_id}] לא נמצא לקוח`;
+function resolveChange(snap: Awaited<ReturnType<typeof snapshot>>, ch: { item_id: number; field: string; value: string }, ppl: Record<string, string> = {}, sub = false): Action | string {
+  const it = sub ? snap.subItems[ch.item_id] : snap.items[ch.item_id];
+  if (!it) return `[${ch.item_id}] ${sub ? "לא נמצאה שורת תשלום" : "לא נמצא לקוח"}`;
   const value = String(ch.value ?? "").trim();
   const base = { item_id: it.id, name: it.name, field: ch.field };
-  if (ch.field === "קבוצה") {
+  if (ch.field === "קבוצה" && !sub) {
     const gid = Object.keys(snap.gname).find((k) => snap.gname[k] === value);
     if (!gid) return `אין קבוצה בשם "${value}". הקבוצות: ${Object.values(snap.gname).join(", ")}`;
     return { ...base, from: snap.gname[it.group_id] ?? "", to: value, patch: { group_id: gid } };
   }
   if (ch.field === "שם") { if (!value) return "שם לא יכול להיות ריק"; return { ...base, from: it.name, to: value, patch: { name: value } }; }
-  const c = snap.mainCols.find((x) => x.title === ch.field);
+  const c = (sub ? snap.subCols : snap.mainCols).find((x) => x.title === ch.field);
   if (!c) return `אין עמודה בשם "${ch.field}"`;
   const from = valText(c, it.vals?.[c.id], ppl);
   if (!value) return { ...base, from, to: "(ריק)", patch: { col: c.id, val: null } };
@@ -137,6 +149,96 @@ function resolveChange(snap: Awaited<ReturnType<typeof snapshot>>, ch: { item_id
   if (c.type === "date") { if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return "תאריך בפורמט YYYY-MM-DD"; return { ...base, from, to: value, patch: { col: c.id, val: value } }; }
   if (["people", "file", "subtasks"].includes(c.type)) return `את העמודה ${c.title} משנים במסך`;
   return { ...base, from, to: value, patch: { col: c.id, val: value } };
+}
+
+// Admin ops become concrete row changes that the app runs as the signed-in user (RLS applies) after "אישור".
+type Op = { t: "insert"; table: string; row: Record<string, any> } | { t: "update"; table: string; match: Record<string, any>; set: Record<string, any>; before: Record<string, any> };
+type AdminAction = { kind: "admin"; desc: string; ops: Op[] };
+const uid = (p: string) => p + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+const PALETTE = ["#579bfc", "#00c875", "#fdab3d", "#e2445c", "#a25ddc", "#037f4c", "#ff642e", "#66ccff"];
+
+function resolveAdmin(snap: Awaited<ReturnType<typeof snapshot>>, o: any, me: { person_id: string | null; name: string }): AdminAction | Action | string {
+  const nm = String(o.name ?? "").trim();
+  const col = (b: string) => snap.cols.find((c) => c.board_id === b && c.title === String(o.column ?? "").trim() && !["name", "subtasks", "file"].includes(c.type));
+  const anyCol = () => col(BOARD) ?? col(SUB_BOARD);
+  const grp = (t: string) => snap.groups.find((g) => g.title === String(t ?? "").trim());
+  const upd = (table: string, match: Record<string, any>, set: Record<string, any>, before: Record<string, any>): Op => ({ t: "update", table, match, set, before });
+  switch (o.op) {
+    case "add_customer": {
+      if (!nm) return "חסר שם ללקוח";
+      const g = o.group ? grp(o.group) : snap.groups[0];
+      if (!g) return `אין קבוצה בשם "${o.group}"`;
+      const row = { board_id: BOARD, group_id: g.id, name: nm, position: -Date.now() / 1000, vals: {}, creator_id: me.person_id };
+      const pay = ["תשלום בש״ח לנדב בלושטיין", "תשלום בש״ח לטרקטור הירוק"];
+      return { kind: "admin", desc: `לקוח חדש: ${nm} (בקבוצה ${g.title}, עם שתי שורות תשלום)`, ops: [{ t: "insert", table: "rys_items", row: { ...row, _pay: pay } }] };
+    }
+    case "delete_customer": {
+      const it = snap.items[o.item_id]; if (!it) return `[${o.item_id}] לא נמצא לקוח`;
+      return { kind: "admin", desc: `מחיקת הלקוח ${it.name} (עובר לארכיון, אפשר לשחזר)`, ops: [upd("rys_items", { id: it.id }, { archived: true }, { archived: false })] };
+    }
+    case "add_payment_row": {
+      const it = snap.items[o.item_id]; if (!it) return `[${o.item_id}] לא נמצא לקוח`;
+      if (!nm) return "חסר שם לשורת התשלום";
+      return { kind: "admin", desc: `שורת תשלום חדשה אצל ${it.name}: ${nm}`, ops: [{ t: "insert", table: "rys_items", row: { board_id: SUB_BOARD, group_id: snap.subGroup, parent_item_id: it.id, name: nm, position: Date.now() / 1000, vals: {}, creator_id: me.person_id } }] };
+    }
+    case "set_payment": {
+      const r = resolveChange(snap, { item_id: o.row_id, field: String(o.field ?? ""), value: String(o.value ?? "") }, snap.ppl, true);
+      if (typeof r === "string") return r;
+      const parent = snap.items[snap.subItems[o.row_id].parent_item_id!];
+      return { ...r, sub: true, name: `${parent?.name ?? ""} · ${r.name}` } as any;
+    }
+    case "delete_payment_row": {
+      const s = snap.subItems[o.row_id]; if (!s) return `[${o.row_id}] לא נמצאה שורת תשלום`;
+      const parent = snap.items[s.parent_item_id!];
+      return { kind: "admin", desc: `מחיקת שורת התשלום "${s.name}" אצל ${parent?.name ?? ""}`, ops: [upd("rys_items", { id: s.id }, { archived: true }, { archived: false })] };
+    }
+    case "add_update": {
+      const it = snap.items[o.item_id]; if (!it) return `[${o.item_id}] לא נמצא לקוח`;
+      const text = String(o.text ?? "").trim(); if (!text) return "חסר תוכן לעדכון";
+      const body = text.split("\n").map((l) => `<p>${l.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</p>`).join("");
+      return { kind: "admin", desc: `עדכון חדש אצל ${it.name}: "${text.slice(0, 120)}"`, ops: [{ t: "insert", table: "rys_updates", row: { item_id: it.id, parent_id: null, body, creator_id: me.person_id, creator_name: me.name } }] };
+    }
+    case "add_group": {
+      if (!nm) return "חסר שם לקבוצה"; if (grp(nm)) return `כבר יש קבוצה בשם "${nm}"`;
+      return { kind: "admin", desc: `קבוצה חדשה: ${nm}`, ops: [{ t: "insert", table: "rys_groups", row: { board_id: BOARD, id: uid("g_"), title: nm, color: PALETTE[snap.groups.length % PALETTE.length], position: snap.groups.length + 1 } }] };
+    }
+    case "rename_group": {
+      const g = grp(o.group); if (!g) return `אין קבוצה בשם "${o.group}"`; if (!nm) return "חסר שם חדש";
+      return { kind: "admin", desc: `שינוי שם הקבוצה "${g.title}" ל"${nm}"`, ops: [upd("rys_groups", { board_id: BOARD, id: g.id }, { title: nm }, { title: g.title })] };
+    }
+    case "add_column": {
+      if (!nm) return "חסר שם לעמודה"; if (snap.cols.some((c) => c.board_id === BOARD && c.title === nm)) return `כבר יש עמודה בשם "${nm}"`;
+      const type = o.column_type ?? "text";
+      const settings = type === "status" ? { labels: { "5": "" }, labels_colors: {} } : {};
+      const pos = Math.max(0, ...snap.cols.filter((c) => c.board_id === BOARD).map((c: any) => c.position ?? 0)) + 1;
+      return { kind: "admin", desc: `עמודה חדשה בטבלת הלקוחות: ${nm}`, ops: [{ t: "insert", table: "rys_columns", row: { board_id: BOARD, id: uid(type === "numbers" ? "numeric_" : type === "checkbox" ? "boolean_" : type === "status" ? "color_" : type === "date" ? "date_" : "text_"), title: nm, type, settings, hidden: false, position: pos } }] };
+    }
+    case "rename_column": case "hide_column": case "show_column": {
+      const c = anyCol(); if (!c) return `אין עמודה בשם "${o.column}"`;
+      if (o.op === "rename_column") { if (!nm) return "חסר שם חדש"; return { kind: "admin", desc: `שינוי שם העמודה "${c.title}" ל"${nm}"`, ops: [upd("rys_columns", { board_id: c.board_id, id: c.id }, { title: nm }, { title: c.title })] }; }
+      const hide = o.op === "hide_column";
+      return { kind: "admin", desc: `${hide ? "הסתרת" : "הצגת"} העמודה "${c.title}"${hide ? " (הנתונים נשמרים)" : ""}`, ops: [upd("rys_columns", { board_id: c.board_id, id: c.id }, { hidden: hide }, { hidden: c.hidden })] };
+    }
+    case "add_option": case "rename_option": {
+      const c = anyCol(); if (!c || c.type !== "status") return `אין עמודת בחירה בשם "${o.column}"`;
+      if (!nm) return "חסר שם לאפשרות";
+      const st = JSON.parse(JSON.stringify(c.settings ?? {})); st.labels = st.labels ?? {}; st.labels_colors = st.labels_colors ?? {};
+      if (Object.values(st.labels).includes(nm)) return `כבר יש אפשרות "${nm}" בעמודה ${c.title}`;
+      let desc: string;
+      if (o.op === "add_option") {
+        let k = 0; while (st.labels[String(k)] || String(k) === "5") k++;
+        st.labels[String(k)] = nm; st.labels_colors[String(k)] = { color: PALETTE[k % PALETTE.length] };
+        if (st.labels_positions_v2) st.labels_positions_v2[String(k)] = 999;
+        desc = `אפשרות חדשה בעמודה ${c.title}: ${nm}`;
+      } else {
+        const k = Object.keys(st.labels).find((x) => st.labels[x] === String(o.option ?? "").trim());
+        if (k === undefined) return `אין אפשרות "${o.option}" בעמודה ${c.title}`;
+        st.labels[k] = nm; desc = `שינוי שם האפשרות "${o.option}" ל"${nm}" בעמודה ${c.title} (בכל הלקוחות)`;
+      }
+      return { kind: "admin", desc, ops: [upd("rys_columns", { board_id: c.board_id, id: c.id }, { settings: st }, { settings: c.settings })] };
+    }
+  }
+  return "פעולה לא מוכרת";
 }
 
 async function runTool(db: SupabaseClient, names: Record<number, string>, name: string, input: any): Promise<string> {
@@ -169,6 +271,8 @@ Deno.serve(async (req) => {
   if (!u?.user) return json({ error: "צריך להתחבר מחדש" }, 401);
   const { data: member } = await db.rpc("rys_is_member");
   if (!member) return json({ error: "אין גישה" }, 403);
+  const { data: mrow } = await db.from("rys_members").select("person_id,name").eq("user_id", u.user.id).maybeSingle();
+  const me = { person_id: mrow?.person_id ?? null, name: mrow?.name ?? "" };
   if (!Deno.env.get("ANTHROPIC_API_KEY")) return json({ error: "העוזר עוד לא מחובר: חסר מפתח של Anthropic" }, 503);
 
   let body: { question?: string; history?: { role: "user" | "assistant"; content: string }[] };
@@ -188,7 +292,7 @@ Deno.serve(async (req) => {
     const history = (body.history ?? []).filter((t) => (t.role === "user" || t.role === "assistant") && typeof t.content === "string" && t.content).slice(-12);
     const messages: Anthropic.Beta.BetaMessageParam[] = [...history, { role: "user", content: question }];
     let cost = 0, text = "";
-    const actions: Action[] = [];
+    const actions: any[] = [];
     for (let round = 0; round < 8; round++) {
       const res = await client.beta.messages.create({
         model: MODEL,
@@ -215,6 +319,13 @@ Deno.serve(async (req) => {
         if (b.name === "propose_changes") {
           const out = (b.input.changes ?? []).slice(0, 50).map((ch: any) => resolveChange(snap, ch));
           const ok = out.filter((x: any) => typeof x !== "string") as Action[];
+          actions.push(...ok);
+          const bad = out.filter((x: any) => typeof x === "string");
+          return { type: "tool_result" as const, tool_use_id: b.id, content: `${ok.length} שינויים מוצגים למשתמש לאישור.${bad.length ? " נדחו: " + bad.join("; ") : ""}`, is_error: ok.length === 0 };
+        }
+        if (b.name === "propose_admin") {
+          const out = (b.input.ops ?? []).slice(0, 30).map((o: any) => resolveAdmin(snap, o, me));
+          const ok = out.filter((x: any) => typeof x !== "string");
           actions.push(...ok);
           const bad = out.filter((x: any) => typeof x === "string");
           return { type: "tool_result" as const, tool_use_id: b.id, content: `${ok.length} שינויים מוצגים למשתמש לאישור.${bad.length ? " נדחו: " + bad.join("; ") : ""}`, is_error: ok.length === 0 };
